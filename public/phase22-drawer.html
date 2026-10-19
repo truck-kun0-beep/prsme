@@ -1,0 +1,41 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>phase22-drawer</title>
+<style>html,body{margin:0;background:#0B0B10;color:#E6E6EC;font:11px/1.4 ui-monospace,monospace;padding:6px}</style>
+</head><body>
+<pre id="o">running…</pre>
+<iframe id="f"></iframe>
+<script>
+const w = parseInt(new URLSearchParams(location.search).get("w") || "360", 10);
+const f = document.getElementById("f");
+f.style.cssText = `display:block;width:${w}px;height:600px;border:0`;
+f.src = "http://127.0.0.1:3939/u/noir?" + Date.now();
+f.addEventListener("load", () => {
+  setTimeout(async () => {
+    try {
+      const doc = f.contentDocument;
+      try { await doc.fonts.ready; } catch (e) {}
+      const toggleBtn = () => doc.querySelector('button[aria-controls="mobile-nav-panel"]');
+      const panel = () => doc.getElementById('mobile-nav-panel');
+      const out = { shareBtn: !!toggleBtn() };
+      const t = toggleBtn();
+      if (t) {
+        out.toggleAriaExpanded = t.getAttribute('aria-expanded');
+        out.toggleAriaLabel = t.getAttribute('aria-label');
+        out.panelInitiallyHidden = panel()?.hasAttribute('hidden') ?? null;
+        t.click();
+        await new Promise(r => setTimeout(r, 200));
+        out.afterClickAriaExpanded = t.getAttribute('aria-expanded');
+        out.afterClickPanelHidden = panel()?.hasAttribute('hidden') ?? null;
+        t.click();
+        await new Promise(r => setTimeout(r, 200));
+        out.afterSecondToggleAriaExpanded = t.getAttribute('aria-expanded');
+      }
+      document.getElementById("o").textContent = JSON.stringify(out, null, 2);
+      document.title = "drawer w=" + w;
+    } catch (e) {
+      document.getElementById("o").textContent = "ERR " + e;
+    }
+  }, 1500);
+});
+</script>
+</body></html>

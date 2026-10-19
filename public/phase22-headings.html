@@ -1,0 +1,39 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>phase22-headings</title>
+<style>html,body{margin:0;background:#0B0B10;color:#E6E6EC;font:11px/1.4 ui-monospace,monospace;padding:6px}</style>
+</head><body>
+<pre id="o">running…</pre>
+<iframe id="f"></iframe>
+<script>
+const w = parseInt(new URLSearchParams(location.search).get("w") || "1280", 10);
+const f = document.getElementById("f");
+f.style.cssText = `display:block;width:${w}px;height:3800px;border:0`;
+f.src = "http://127.0.0.1:3939/u/noir?" + Date.now();
+f.addEventListener("load", () => {
+  setTimeout(async () => {
+    try {
+      const doc = f.contentDocument;
+      try { await doc.fonts.ready; } catch (e) {}
+      const headings = Array.from(doc.querySelectorAll("h1, h2, h3, h4")).map(h => ({
+        tag: h.tagName,
+        text: (h.innerText || "").trim().slice(0, 60),
+      }));
+      const linksToInstagram = Array.from(doc.querySelectorAll('a[href*="instagram.com"]')).map(a => a.closest('section')?.id || null);
+      const moreOnIg = (doc.body.innerText || "").toLowerCase().includes('more on instagram');
+      const out = {
+        w,
+        headings: headings.slice(0, 16),
+        instagramLinkSections: linksToInstagram,
+        moreOnInstagramInBody: moreOnIg,
+        titleVisible: !!doc.title,
+        pageTitle: doc.title,
+      };
+      document.getElementById("o").textContent = JSON.stringify(out, null, 2);
+      document.title = "headings w=" + w;
+    } catch (e) {
+      document.getElementById("o").textContent = "ERR " + e;
+    }
+  }, 1500);
+});
+</script>
+</body></html>

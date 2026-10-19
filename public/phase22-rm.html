@@ -1,0 +1,45 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>phase22-rm</title>
+<style>html,body{margin:0;background:#0B0B10;color:#E6E6EC;font:11px/1.4 ui-monospace,monospace;padding:6px}</style>
+</head><body>
+<pre id="o">running…</pre>
+<iframe id="f"></iframe>
+<script>
+const w = parseInt(new URLSearchParams(location.search).get("w") || "1280", 10);
+const f = document.getElementById("f");
+f.style.cssText = `display:block;width:${w}px;height:3800px;border:0`;
+f.src = "http://127.0.0.1:3939/u/noir?" + Date.now();
+f.addEventListener("load", () => {
+  setTimeout(async () => {
+    try {
+      const doc = f.contentDocument;
+      const win = f.contentWindow;
+      try { await doc.fonts.ready; } catch (e) {}
+      const motionReduced = win.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const reveals = doc.querySelectorAll('.reveal');
+      let revealsWithOpacity1 = 0;
+      let revealsVisible = 0;
+      reveals.forEach(r => {
+        const cs = win.getComputedStyle(r);
+        if (cs.opacity === '1') revealsWithOpacity1++;
+        if (r.classList.contains('is-visible')) revealsVisible++;
+      });
+      const st = doc.querySelector('[data-testid="profile-soundtrack"]');
+      const out = {
+        w,
+        motionReduced,
+        reveals: reveals.length,
+        revealsOpacity1: revealsWithOpacity1,
+        revealsMarkedVisible: revealsVisible,
+        soundtrackPresent: !!st,
+        titleVisible: st?.querySelector('h3')?.innerText,
+      };
+      document.getElementById("o").textContent = JSON.stringify(out, null, 2);
+      document.title = "rm w=" + w;
+    } catch (e) {
+      document.getElementById("o").textContent = "ERR " + e;
+    }
+  }, 1500);
+});
+</script>
+</body></html>

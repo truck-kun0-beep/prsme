@@ -1,0 +1,94 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>phase22-overflow</title>
+<style>html,body{margin:0;background:#0B0B10;color:#E6E6EC;font:11px/1.4 ui-monospace,monospace;padding:6px}</style>
+</head><body>
+<pre id="o">running…</pre>
+<iframe id="f"></iframe>
+<script>
+const params = new URLSearchParams(location.search);
+const w = parseInt(params.get("w") || "1280", 10);
+const p = params.get("p") || "/u/noir";
+const f = document.getElementById("f");
+f.style.cssText = `display:block;width:${w}px;height:3800px;border:0`;
+f.src = "http://127.0.0.1:3939" + p + "?" + Date.now();
+f.addEventListener("load", () => {
+  setTimeout(async () => {
+    try {
+      const doc = f.contentDocument;
+      const win = f.contentWindow;
+      try { await doc.fonts.ready; } catch (e) {}
+      const html = doc.documentElement;
+      const isInsideScroll = el => {
+        let cur = el.parentElement;
+        while (cur) {
+          const cs = win.getComputedStyle(cur);
+          const ovX = cs.overflowX;
+          if (ovX === "auto" || ovX === "scroll" || ovX === "hidden") return true;
+          cur = cur.parentElement;
+        }
+        return false;
+      };
+      const isSvg = el => {
+        let cur = el.parentElement;
+        while (cur) { if (cur.tagName === "svg" || cur.tagName === "SVG") return true; cur = cur.parentElement; }
+        return false;
+      };
+      const overflows = [];
+      doc.querySelectorAll("body *").forEach(el => {
+        if (isSvg(el)) return;
+        if (isInsideScroll(el)) return;
+        const r = el.getBoundingClientRect();
+        if (r.width > 0 && r.right > win.innerWidth + 1) {
+          overflows.push({
+            tag: el.tagName.toLowerCase(),
+            cls: (el.className || "").toString().slice(0, 80),
+            right: Math.round(r.right),
+            width: Math.round(r.width),
+          });
+        }
+      });
+
+      const soundtrack = doc.querySelector('[data-testid="profile-soundtrack"]');
+      let soundtrackInfo = null;
+      if (soundtrack) {
+        const r = soundtrack.getBoundingClientRect();
+        const cover = soundtrack.querySelector('img');
+        const title = soundtrack.querySelector('h3');
+        const listenBtn = soundtrack.querySelector('button[aria-label^="Listen"]');
+        const stopBtn = soundtrack.querySelector('button[aria-label="Stop playback"]');
+        const externalLink = soundtrack.querySelector('a[aria-label*="Open the album"], a[aria-label*="Open on Spotify"], a[aria-label*="Open on Spotify"]');
+        soundtrackInfo = {
+          present: true,
+          bounds: { y: Math.round(r.top), height: Math.round(r.height), width: Math.round(r.width) },
+          coverLoaded: cover && cover.complete && cover.naturalWidth > 0,
+          coverSrc: cover?.src?.slice(0, 80) || null,
+          titleText: title?.innerText || null,
+          hasListenBtn: !!listenBtn,
+          hasStopBtn: !!stopBtn,
+          hasExternalLink: !!externalLink,
+          externalHref: externalLink?.href || null,
+        };
+      }
+      const h1 = doc.querySelector('h1')?.innerText?.slice(0, 60);
+      const clicksHeading = doc.querySelector('#clicks-heading');
+      const out = {
+        w,
+        path: p,
+        innerWidth: win.innerWidth,
+        docW: html.scrollWidth,
+        diff: html.scrollWidth - win.innerWidth,
+        oflowCount: overflows.length,
+        overflowSample: overflows.slice(0, 4),
+        h1,
+        clicksHeadingPresent: !!clicksHeading,
+        soundtrack: soundtrackInfo,
+      };
+      document.getElementById("o").textContent = JSON.stringify(out, null, 2);
+      document.title = "ok w=" + w;
+    } catch (e) {
+      document.getElementById("o").textContent = "ERR " + e;
+    }
+  }, 1500);
+});
+</script>
+</body></html>

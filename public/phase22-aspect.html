@@ -1,0 +1,36 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>phase22-aspect</title>
+<style>html,body{margin:0;background:#0B0B10;color:#E6E6EC;font:11px/1.4 ui-monospace,monospace;padding:6px}</style>
+</head><body>
+<pre id="o">running…</pre>
+<iframe id="f"></iframe>
+<script>
+const w = parseInt(new URLSearchParams(location.search).get("w") || "1280", 10);
+const f = document.getElementById("f");
+f.style.cssText = `display:block;width:${w}px;height:3800px;border:0`;
+f.src = "http://127.0.0.1:3939/u/noir?" + Date.now();
+f.addEventListener("load", () => {
+  setTimeout(async () => {
+    try {
+      const doc = f.contentDocument;
+      try { await doc.fonts.ready; } catch (e) {}
+      const st = doc.querySelector('[data-testid="profile-soundtrack"]');
+      const coverContainer = st?.querySelector('div.h-24, div.h-28, div.h-32, div.h-36');
+      const img = st?.querySelector('img');
+      const out = {
+        w,
+        coverContainerBounds: coverContainer?.getBoundingClientRect(),
+        coverContainerTag: coverContainer?.className?.slice(0, 60) || null,
+        imgBounds: img?.getBoundingClientRect(),
+        imgNaturalSize: img ? `${img.naturalWidth}x${img.naturalHeight}` : null,
+        imgComplete: img?.complete,
+      };
+      document.getElementById("o").textContent = JSON.stringify(out, null, 2);
+      document.title = "aspect w=" + w;
+    } catch (e) {
+      document.getElementById("o").textContent = "ERR " + e;
+    }
+  }, 2000);
+});
+</script>
+</body></html>

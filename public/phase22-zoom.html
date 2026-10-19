@@ -1,0 +1,22 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>phase22-zoom</title>
+<style>html,body{margin:0;background:#0B0B10}</style>
+</head><body>
+<iframe id="f"></iframe>
+<script>
+const w = parseInt(new URLSearchParams(location.search).get("w") || "1280", 10);
+const scrollY = parseInt(new URLSearchParams(location.search).get("y") || "0", 10);
+const f = document.getElementById("f");
+f.style.cssText = `display:block;width:${w}px;height:3800px;border:0`;
+f.src = "http://127.0.0.1:3939/u/noir?" + Date.now();
+f.addEventListener("load", () => {
+  setTimeout(() => {
+    try {
+      const win = f.contentWindow;
+      win.scrollTo(0, scrollY);
+      document.title = "zoomed y=" + scrollY;
+    } catch (e) { document.title = "ERR " + e; }
+  }, 1200);
+});
+</script>
+</body></html>
