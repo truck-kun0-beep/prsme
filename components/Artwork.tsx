@@ -1,4 +1,7 @@
-import type { CSSProperties } from "react";
+"use client";
+
+import { useEffect, useState, type CSSProperties } from "react";
+import { isAllowedArtworkUrl } from "@/lib/media/http";
 
 type Palette =
   | "amber"
@@ -29,6 +32,15 @@ interface ArtworkProps {
   className?: string;
   ratio?: "1/1" | "2/3" | "3/4" | "4/5" | "16/9" | "21/9" | "auto";
   variant?: "cover" | "tile";
+  /**
+   * Phase 4 — when an `src` is supplied and the host is in the allowlist,
+   * the artwork renders an `<img>` instead of the palette placeholder. The
+   * `alt` is what screen readers will hear — keep it short and meaningful.
+   * If the image fails to load, we fall back to the palette placeholder so
+   * the layout never collapses.
+   */
+  src?: string;
+  alt?: string;
   children?: React.ReactNode;
 }
 
@@ -39,7 +51,21 @@ const ratioMap: Record<NonNullable<ArtworkProps["ratio"]>, string> = {
   "4/5": "aspect-[4/5]",
   "16/9": "aspect-video",
   "21/9": "aspect-[21/9]",
-  auto: "",
+  /*
+   * Phase 4.2 — `auto` no longer emits an empty class string.
+   *
+   * This is the actual root cause of "selected film artwork is not displayed".
+   * Every sized frame in the layouts (`.pf-poster-frame`, `.pf-featured-hero-frame`,
+   * the Compact and Soundtrack List thumbnails) is `position: relative` with a
+   * fixed `aspect-ratio`, and the `<img>` inside `Artwork` is `position: absolute`.
+   * With an empty wrapper class the wrapper had *no height of its own* and, in
+   * several frames, no width either — so a valid, allowlisted poster URL rendered
+   * into a zero-height box and looked exactly like "no artwork".
+   *
+   * `h-full w-full` makes the wrapper fill the frame it is dropped into, so the
+   * poster always has a real box. The aspect ratio still comes from the frame.
+   */
+  auto: "h-full w-full",
 };
 
 export function Artwork({
@@ -48,10 +74,28 @@ export function Artwork({
   className = "",
   ratio = "1/1",
   variant = "cover",
+  src,
+  alt,
   children,
 }: ArtworkProps) {
   const [a, b, c] = paletteStops[palette];
   const id = `art-${palette}-${variant}`;
+  // Phase 4 — real covers are rendered as <img>. We only show an <img> when
+  // the host is allowlisted; otherwise we fall back to the palette placeholder
+  // so an unexpected URL cannot route data through our UI.
+  const safeSrc = isAllowedArtworkUrl(src ?? null) ? src ?? null : null;
+  const [imgErrored, setImgErrored] = useState(false);
+
+  /*
+   * Phase 4.2 — a previously-failed image must reset when the owner picks a
+   * different one. Without this, the stale `imgErrored` flag is reused for the
+   * next artwork URL, which is exactly the "the previous item's image sticks
+   * after selecting another" defect. Keying on the URL also means a *new*
+   * selection always gets a real attempt at loading.
+   */
+  useEffect(() => {
+    setImgErrored(false);
+  }, [safeSrc]);
 
   const styleVars: CSSProperties = {
     ["--a" as string]: a,
@@ -59,19 +103,33 @@ export function Artwork({
     ["--c" as string]: c,
   };
 
+  const useImage = safeSrc && !imgErrored;
+
   return (
     <div
       className={`relative w-full overflow-hidden rounded-md ${ratioMap[ratio]} ${className}`}
       style={styleVars}
       role="img"
       aria-label={label ?? "Sample artwork"}
+      data-source={useImage ? "catalogue" : "placeholder"}
     >
-      <svg
-        viewBox="0 0 200 200"
-        preserveAspectRatio="xMidYMid slice"
-        className="absolute inset-0 h-full w-full"
-        aria-hidden
-      >
+      {useImage ? (
+        <img
+          src={safeSrc as string}
+          alt={alt ?? label ?? "Cover artwork"}
+          loading="lazy"
+          decoding="async"
+          className="absolute inset-0 h-full w-full object-cover"
+          referrerPolicy="no-referrer"
+          onError={() => setImgErrored(true)}
+        />
+      ) : (
+        <svg
+          viewBox="0 0 200 200"
+          preserveAspectRatio="xMidYMid slice"
+          className="absolute inset-0 h-full w-full"
+          aria-hidden
+        >
         <defs>
           <linearGradient id={`${id}-bg`} x1="0" y1="0" x2="1" y2="1">
             <stop offset="0%" stopColor="var(--a)" />
@@ -130,7 +188,8 @@ export function Artwork({
 
         {/* Grain overlay */}
         <rect width="200" height="200" fill="rgba(0,0,0,0.18)" />
-      </svg>
+        </svg>
+      )}
       {children}
     </div>
   );

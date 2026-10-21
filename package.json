@@ -7,7 +7,20 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:phase24": "node scripts/phase24-test.mjs",
+    "test:phase24:regression": "node scripts/phase24-regression.mjs",
+    "test:phase25": "node scripts/phase25-test.mjs",
+    "test:phase3": "node scripts/phase3-regression.mjs",
+    "test:phase3:studio": "node scripts/phase3-studio-drive.mjs",
+    "test:phase31": "node scripts/phase31-suite.mjs",
+    "test:phase4": "node scripts/phase4-suite.mjs",
+    "test:phase41": "node scripts/phase41-api-check.mjs",
+    "test:phase41:browser": "node scripts/phase41-browser-checks.mjs",
+    "capture:phase4": "node scripts/capture-phase4.mjs",
+    "capture:phase41": "node scripts/capture-phase41.mjs",
+    "verify:phase41:artwork": "node scripts/verify-persist-artwork.mjs",
+    "verify:phase41:soundtrack": "node scripts/verify-soundtrack-metadata.mjs"
   },
   "dependencies": {
     "next": "15.1.6",

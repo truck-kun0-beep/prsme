@@ -1,269 +1,125 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { Artwork } from "./Artwork";
 import type { ProfileSoundtrack as Soundtrack } from "@/lib/noirProfile";
 
 /**
- * Convert a public Spotify URL into the `/embed/` URL the Spotify Player
- * iframe accepts. Returns null when the URL doesn't match a known
- * embeddable shape — in that case the component shows the external link
- * honestly instead of mounting an iframe that won't load.
+ * Single, definitive PRSME profile soundtrack card.
  *
- * Exported for unit testing.
- */
-export function toEmbedUrl(trackUrl: string): string | null {
-  try {
-    const u = new URL(trackUrl);
-    if (u.hostname !== "open.spotify.com" && u.hostname !== "spotify.com") {
-      return null;
-    }
-    // Accept /track/{id}, /album/{id}, /playlist/{id}, /artist/{id},
-    // /episode/{id}, /show/{id}. Anything else (root, /search, etc.) is
-    // not officially embeddable.
-    const match = u.pathname.match(
-      /^\/(track|album|playlist|artist|episode|show)\/[A-Za-z0-9]+(?=\/|$)/,
-    );
-    if (!match) return null;
-    return `https://open.spotify.com/embed/${match[1]}/${u.pathname.split("/")[2]}${u.search ?? ""}`;
-  } catch {
-    return null;
-  }
-}
-
-type LoadState = "idle" | "loading" | "loaded" | "error";
-
-/**
- * Compact profile soundtrack component.
- *
- * Visual intent: a deliberate, editorial soundtrack row — album cover
- * (real or local-palette fallback), title in display serif, artist
- * metadata, eyebrow label, and a primary Listen/Stop action. The Stop
- * action genuinely unmounts the embedded player, so audio stops for
- * real (no faked state).
- *
- * Behavior contracts:
- *  - Never autoplays; the visitor must press the explicit Listen button.
- *  - If the provider URL isn't embeddable (root, search, malformed),
- *    shows a fallback external link with an honest label, never
- *    pretending playback is happening.
- *  - Reduced-motion: no internal motion; the existing global
- *    `prefers-reduced-motion` styles take care of any CSS transitions.
- *  - Keyboard: all controls are real buttons / anchors with aria-labels.
- *  - When `soundtrack` is undefined, the component renders nothing.
+ * Renders inside `.profile-scope` and consumes the profile-scoped tokens
+ * (--pf-surface-*, --pf-text-*, --pf-accent-soft, --pf-meta, --pf-border,
+ * --pf-overlay-*) so a theme switch recolours the card. The decorative halo
+ * uses `var(--pf-accent)` so it follows the active accent.
  */
 export function ProfileSoundtrack({ soundtrack }: { soundtrack?: Soundtrack }) {
-  const [mounted, setMounted] = useState(false);
-  const [loadState, setLoadState] = useState<LoadState>("idle");
-  const [embedAvailable, setEmbedAvailable] = useState<boolean | null>(null);
   const [coverFailed, setCoverFailed] = useState(false);
-  const iframeRef = useRef<HTMLIFrameElement | null>(null);
-
-  // Determine upfront whether the URL is officially embeddable.
-  // Done in an effect so SSR doesn't choke on absent URL APIs.
-  useEffect(() => {
-    if (!soundtrack) return;
-    setEmbedAvailable(toEmbedUrl(soundtrack.trackUrl) !== null);
-  }, [soundtrack]);
 
   if (!soundtrack) return null;
 
-  const start = () => {
-    setMounted(true);
-    setLoadState("loading");
-  };
-  const stop = () => {
-    // Removing the iframe from the DOM genuinely stops the audio playback.
-    setMounted(false);
-    setLoadState("idle");
-  };
-
-  const embedUrl = toEmbedUrl(soundtrack.trackUrl);
-  const provider = providerLabel(soundtrack.provider);
-  const showRealCover = !!soundtrack.coverUrl && !coverFailed;
-  const showFullAlbumFallback =
-    embedAvailable === false && !soundtrack.externalUrl;
+  // The configured track URL is the primary link. The optional `externalUrl`
+  // overrides it (used by the demo to point at the parent album instead of
+  // the single track). Either way, this is a real, configured Spotify URL —
+  // never the Spotify homepage.
+  const destination = soundtrack.externalUrl ?? soundtrack.trackUrl;
 
   return (
-    <section
+    <article
       aria-labelledby="profile-soundtrack-title"
-      className="relative overflow-hidden rounded-[var(--r-lg)] border border-[var(--line-soft)] bg-[var(--surface-2)]"
+      className="pf-soundtrack"
       data-testid="profile-soundtrack"
     >
-      {/* Decorative prismatic gradient halo behind the cover */}
-      <div
+      {/* Decorative halo — restrained, anchored top-right. Colour follows
+          the active theme accent; never a hardcoded violet. */}
+      <span
         aria-hidden
-        className="pointer-events-none absolute -right-20 -top-24 h-72 w-72 rounded-full opacity-25 blur-3xl"
-        style={{
-          background:
-            "radial-gradient(closest-side, var(--iris-400), transparent 70%)",
-        }}
+        className="pf-soundtrack-halo"
       />
 
-      <div className="relative grid grid-cols-1 gap-5 p-5 sm:grid-cols-[auto_1fr_auto] sm:items-center sm:gap-6 sm:p-6 md:p-7">
-        {/* Cover — real image with a graceful local-palette fallback */}
-        <CoverArtwork soundtrack={soundtrack} failed={coverFailed} onError={() => setCoverFailed(true)} />
+      <div className="relative grid grid-cols-[auto_1fr_auto] items-center gap-4 px-4 py-4 sm:gap-5 sm:px-5 sm:py-5">
+        {/* Cover — real image with palette fallback */}
+        <CoverArtwork
+          soundtrack={soundtrack}
+          failed={coverFailed}
+          onError={() => setCoverFailed(true)}
+        />
 
-        {/* Track meta */}
+        {/* Track meta — a deliberate three-line hierarchy so album names wrap
+            naturally on mobile. Title stays the largest, artist is secondary,
+            album is more muted. Provider attribution is intentionally
+            *removed* from this surface — it is not a soundtrack caption,
+            and the brief is explicit that no decorative badge belongs on
+            every soundtrack. Source attribution lives in the credits/about
+            surface instead. */}
         <div className="min-w-0">
-          <p className="flex items-center gap-2 text-[11px] uppercase tracking-[0.22em] text-muted-400">
-            <span
-              aria-hidden
-              className={
-                mounted
-                  ? "h-1.5 w-1.5 rounded-full bg-iris-300 animate-iris-pulse"
-                  : "h-1.5 w-1.5 rounded-full bg-iris-300/70"
-              }
-            />
-            <span>
-              {mounted ? "Now playing in profile" : soundtrack.caption ?? "Profile soundtrack"}
-            </span>
-            <span className="text-muted-500" aria-hidden>·</span>
-            <span className="text-muted-300">{provider}</span>
-          </p>
-
           <h3
             id="profile-soundtrack-title"
-            className="mt-2 font-display text-[1.35rem] leading-tight text-muted-50 sm:text-[1.55rem] md:text-[1.7rem]"
+            className="pf-display break-words text-[1.05rem] leading-tight sm:text-[1.25rem]"
           >
             {soundtrack.trackTitle}
           </h3>
-
-          <p className="mt-1 truncate text-[13px] text-muted-300">
-            <span>{soundtrack.trackArtist}</span>
-            {soundtrack.albumTitle && (
-              <>
-                <span aria-hidden className="mx-2 text-muted-500">·</span>
-                <span className="text-muted-400">{soundtrack.albumTitle}</span>
-              </>
-            )}
-          </p>
-
-          {/* Status line: load state + provider credit */}
-          <p
-            className={`mt-2 text-[11px] ${
-              loadState === "error" ? "text-rose-300" : "text-muted-500"
-            }`}
-            role="status"
-            aria-live="polite"
-          >
-            {mounted
-              ? loadState === "error"
-                ? "Embed blocked. Press Stop to dismiss the player."
-                : loadState === "loaded"
-                  ? "Press play inside the embedded player above to start audio."
-                  : "Loading the embedded player from Spotify…"
-              : embedAvailable === false
-                ? showFullAlbumFallback
-                  ? "This track URL isn't in an embeddable format."
-                  : "Open the track on Spotify to listen — playback happens on the provider's site."
-                : "Press Listen to open the embedded player on this page."}
-          </p>
-
-          {soundtrack.coverUrl && soundtrack.coverSource && showRealCover && (
-            <p className="mt-1 text-[10px] uppercase tracking-[0.22em] text-muted-500">
-              Album art · {soundtrack.coverSource}
+          {soundtrack.trackArtist && (
+            <p className="pf-meta mt-1 break-words text-[12px]">
+              {soundtrack.trackArtist}
+            </p>
+          )}
+          {soundtrack.albumTitle && (
+            <p
+              className="pf-meta mt-0.5 break-words text-[12px] opacity-75"
+              data-testid="profile-soundtrack-album"
+            >
+              {soundtrack.albumTitle}
             </p>
           )}
         </div>
 
-        {/* Action column */}
-        <div className="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:min-w-[10.5rem] sm:items-end">
-          {embedAvailable === false ? (
-            // URL is not in an embeddable shape — there's no iframe to show.
-            // The only honest primary action is the external page link.
-            soundtrack.externalUrl ? (
-              <a
-                href={soundtrack.externalUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-iris-400 px-5 text-[13px] font-medium text-ink-950 shadow-glow transition-transform duration-200 ease-soft hover:-translate-y-0.5 hover:bg-iris-300 focus-visible:outline-none"
-                aria-label={`Open ${soundtrack.trackTitle} by ${soundtrack.trackArtist} on ${provider} in a new tab`}
-              >
-                <span aria-hidden>↗</span>
-                <span>Open on {provider}</span>
-              </a>
-            ) : (
-              <p className="text-[12px] text-muted-400">
-                No playable link is configured for this soundtrack.
-              </p>
-            )
-          ) : !mounted ? (
-            <button
-              type="button"
-              onClick={start}
-              className="group inline-flex h-11 items-center justify-center gap-2 rounded-md bg-iris-400 px-5 text-[13px] font-medium text-ink-950 shadow-glow transition-transform duration-200 ease-soft hover:-translate-y-0.5 hover:bg-iris-300 focus-visible:outline-none"
-              aria-label={`Listen to ${soundtrack.trackTitle} by ${soundtrack.trackArtist} on ${provider}`}
-            >
-              <span
-                aria-hidden
-                className="grid h-6 w-6 place-items-center rounded-full bg-ink-950/15 transition-transform duration-200 ease-soft group-hover:translate-x-0.5"
-              >
-                ▶
-              </span>
-              <span>Listen</span>
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={stop}
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-[var(--line-strong)] bg-ink-700/80 px-5 text-[13px] font-medium text-muted-50 transition-colors hover:border-iris-400/40 focus-visible:outline-none"
-              aria-label="Stop playback"
-            >
-              <span
-                aria-hidden
-                className="grid h-6 w-6 place-items-center rounded-sm bg-iris-400/15 text-iris-300"
-              >
-                ■
-              </span>
-              <span>Stop</span>
-            </button>
-          )}
-
-          {soundtrack.externalUrl && embedAvailable !== false && (
-            <a
-              href={soundtrack.externalUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md px-3 text-[12px] text-muted-300 transition-colors hover:text-muted-50 focus-visible:outline-none sm:self-end"
-              aria-label={`Open the album ${soundtrack.albumTitle ?? "containing this track"} on ${provider} in a new tab`}
-            >
-              <span aria-hidden>↗</span>
-              <span>Open album</span>
-            </a>
-          )}
-        </div>
+        {/* Logo-only action — opens the configured track on Spotify. No text. */}
+        <a
+          href={destination}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={`Listen to ${soundtrack.trackTitle} by ${soundtrack.trackArtist} on Spotify`}
+          title={`Listen to ${soundtrack.trackTitle} on Spotify`}
+          className="pf-icon-btn"
+        >
+          <SpotifyGlyph className="h-[18px] w-[18px]" aria-hidden />
+        </a>
       </div>
-
-      {/* The mounted iframe. Unmounting it stops audio completely. */}
-      {mounted && embedUrl && (
-        <div className="relative border-t border-[var(--line-soft)] px-3 pb-4 pt-3 sm:px-5 sm:pb-5 md:px-7">
-          <div className="overflow-hidden rounded-md border border-[var(--line-soft)] bg-ink-950">
-            <iframe
-              ref={iframeRef}
-              title={`${soundtrack.trackTitle} on ${provider}`}
-              src={embedUrl}
-              width="100%"
-              height="152"
-              allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-              loading="lazy"
-              onLoad={() => setLoadState("loaded")}
-              onError={() => setLoadState("error")}
-              className="block w-full"
-            />
-          </div>
-        </div>
-      )}
-    </section>
+    </article>
   );
 }
 
 /**
- * Cover artwork. Renders the real cover image when present, with a
- * graceful fallback to the typed palette artwork when the image fails
- * to load or when no URL is provided. The fallback is layered as the
- * back layer, then the real image overlays it — so a broken image is
- * not a blank square.
+ * The Spotify brand glyph.
+ *
+ * Inline SVG so PRSME doesn't depend on a third-party icon kit or extra file
+ * — same pattern as `Wordmark.tsx` and `SocialIcons.tsx`. The path data is
+ * the canonical 24×24 Spotify mark (circle + three concentric sound-wave
+ * arcs), taken from the publicly-circulated Spotify brand reference. It is
+ * not a Unicode character, emoji, or invented shape.
+ */
+function SpotifyGlyph({
+  className = "h-4 w-4",
+}: {
+  className?: string;
+}) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className={className}
+      fill="currentColor"
+      aria-hidden
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0Zm5.521 17.34a.749.749 0 0 1-1.029.249c-2.819-1.722-6.365-2.111-10.541-1.157a.749.749 0 1 1-.359-1.448c4.512-1.022 8.434-.585 11.539 1.32.358.219.479.696.265 1.036Zm1.474-3.297a.937.937 0 0 1-1.288.31c-3.225-1.982-8.143-2.557-11.953-1.401a.937.937 0 1 1-.5-1.806c4.358-1.207 9.776-.671 13.426 1.602.421.258.553.819.31 1.295h.005Zm.119-3.456c-3.869-2.297-10.249-2.51-13.94-1.39a1.122 1.122 0 0 1-.654-2.165c4.249-1.286 11.215-1.04 15.625 1.598a1.122 1.122 0 0 1-1.031 1.957Z" />
+    </svg>
+  );
+}
+
+/**
+ * Cover artwork. Real image (loaded from the provider's public CDN) with a
+ * graceful fallback to the typed palette artwork when the image fails to
+ * load or when no URL is provided. Always square, never stretched.
  */
 function CoverArtwork({
   soundtrack,
@@ -274,25 +130,23 @@ function CoverArtwork({
   failed: boolean;
   onError: () => void;
 }) {
-  // Square cover, large enough to read as a real album tile.
-  const size =
-    "h-24 w-24 sm:h-28 sm:w-28 md:h-32 md:w-32 lg:h-36 lg:w-36";
+  const size = "h-12 w-12 sm:h-14 sm:w-14 md:h-14 md:w-14";
   return (
-    <div className={`relative ${size} shrink-0 overflow-hidden rounded-md shadow-ring`}>
-      {/* Fallback layer — always rendered */}
+    <div
+      className={`relative ${size} shrink-0 overflow-hidden rounded-md border border-[var(--pf-border)]`}
+    >
       <Artwork
         palette={soundtrack.palette}
         ratio="1/1"
         variant="cover"
-        label={`Cover artwork for ${soundtrack.trackTitle} — ${soundtrack.coverSource ?? "local fallback"}`}
+        label={`Album cover for ${soundtrack.trackTitle}`}
         className="absolute inset-0"
       />
       {soundtrack.coverUrl && !failed && (
-        // Real image, layered above the local palette fallback.
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={soundtrack.coverUrl}
-          alt={`Album cover for ${soundtrack.trackTitle} on ${providerLabel(soundtrack.provider)}`}
+          alt={`Album cover for ${soundtrack.trackTitle}`}
           referrerPolicy="no-referrer"
           decoding="async"
           loading="lazy"
@@ -302,11 +156,4 @@ function CoverArtwork({
       )}
     </div>
   );
-}
-
-function providerLabel(provider: Soundtrack["provider"]): string {
-  switch (provider) {
-    case "spotify":
-      return "Spotify";
-  }
 }

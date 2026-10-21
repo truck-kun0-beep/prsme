@@ -7,13 +7,19 @@ type Size = "sm" | "md" | "lg";
 const base =
   "inline-flex items-center justify-center gap-2 rounded-md font-medium tracking-tight transition-all duration-200 ease-soft focus-visible:outline-none disabled:opacity-50 disabled:pointer-events-none whitespace-nowrap";
 
+/**
+ * Variant styles resolve against the profile-scoped `--pf-*` tokens when the
+ * button sits inside `.profile-scope`, and fall back to the site tokens
+ * elsewhere. That keeps the site nav CTAs and the profile's Share action
+ * consistent with whichever theme the profile owner picked.
+ */
 const variants: Record<Variant, string> = {
   primary:
-    "bg-iris-400 text-ink-950 shadow-glow hover:bg-iris-300 hover:translate-y-[-1px] active:translate-y-0",
+    "pf-btn-primary bg-iris-400 text-ink-950 shadow-glow hover:bg-iris-300 hover:translate-y-[-1px] active:translate-y-0",
   secondary:
-    "bg-ink-700/80 text-muted-50 border border-line-strong hover:bg-ink-600 hover:border-iris-400/40 hover:text-muted-50",
+    "pf-btn-secondary bg-ink-700/80 text-muted-50 border border-line-strong hover:bg-ink-600 hover:border-iris-400/40 hover:text-muted-50",
   ghost:
-    "bg-transparent text-muted-100 hover:text-muted-50 hover:bg-ink-700/50",
+    "pf-btn-ghost bg-transparent text-muted-100 hover:text-muted-50 hover:bg-ink-700/50",
 };
 
 const sizes: Record<Size, string> = {

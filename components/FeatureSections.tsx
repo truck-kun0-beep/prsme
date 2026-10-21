@@ -104,11 +104,10 @@ export function AestheticSection() {
 export function CollectionsSection() {
   const kinds = [
     { key: "film", label: "Films", pal: "iris", note: "Editors' cuts & first watches" },
-    { key: "kdrama", label: "K-dramas", pal: "rose", note: "From comfort rewatches to premieres" },
+    { key: "show", label: "TV series", pal: "cyan", note: "Series from anywhere — dramas, docus, late-night" },
     { key: "music", label: "Music", pal: "amber", note: "Albums, EP, playlists, deep cuts" },
     { key: "manga", label: "Manga", pal: "violet", note: "Track volumes and ongoing series" },
     { key: "book", label: "Books", pal: "forest", note: "Margin notes for later you" },
-    { key: "show", label: "Television", pal: "cyan", note: "Series, docus, late-night talk" },
   ] as const;
 
   return (
@@ -116,7 +115,7 @@ export function CollectionsSection() {
       id="discover"
       eyebrow="Collections"
       title="Everything you're into — catalogued."
-      intro="Build collections that earn their place. PRSME helps you group films, K-dramas, albums, manga, and books into shelves that reflect how you actually experience them."
+      intro="Build collections that earn their place. PRSME helps you group films, TV series, albums, manga, and books into shelves that reflect how you actually experience them."
     >
       <Reveal>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

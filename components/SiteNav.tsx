@@ -12,11 +12,20 @@ const navLinks = [
   { href: "#share", label: "Share" },
 ];
 
+/**
+ * Profile-top navigation.
+ *
+ * Renders the same mobile-first behaviour everywhere, but resolves colours
+ * from the profile-scoped `--pf-*` tokens when it sits inside
+ * `.profile-scope` and from the site tokens on the rest of the app. That
+ * way a Midnight Blue theme visibly recolours the nav inside the iframe,
+ * while the marketing nav on the landing page keeps its own look.
+ */
 export function SiteNav() {
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement | null>(null);
 
-  // Lock body scroll when open on mobile
+  // Lock body scroll when the mobile panel is open.
   useEffect(() => {
     if (!open) return;
     const prev = document.body.style.overflow;
@@ -26,7 +35,7 @@ export function SiteNav() {
     };
   }, [open]);
 
-  // Close on Escape
+  // Esc to close.
   useEffect(() => {
     if (!open) return;
     function onKey(e: KeyboardEvent) {
@@ -37,22 +46,24 @@ export function SiteNav() {
   }, [open]);
 
   return (
-    <header className="sticky top-0 z-50">
-      {/* Soft translucent background that adapts on scroll via CSS */}
-      <div className="absolute inset-0 -z-10 bg-ink-950/70 backdrop-blur-md border-b border-[var(--line-soft)]" />
+    <header className="site-nav sticky top-0 z-50">
+      {/* The scrim sits behind the nav so blur/contrast is consistent. */}
+      <div
+        aria-hidden
+        className="site-nav-scrim absolute inset-0 -z-10 backdrop-blur-md border-b"
+      />
       <nav
         aria-label="Primary"
-        className="container-page flex h-16 items-center justify-between gap-4"
+        className="profile-canvas flex h-16 items-center justify-between gap-4"
       >
         <Wordmark size="sm" />
 
-        {/* Desktop navigation */}
         <ul className="hidden items-center gap-1 md:flex">
           {navLinks.map((l) => (
             <li key={l.href}>
               <Link
                 href={l.href}
-                className="rounded-md px-3 py-2 text-[13px] text-muted-200 transition-colors duration-200 ease-soft hover:text-muted-50 focus-visible:outline-none focus-visible:text-muted-50"
+                className="site-nav-link rounded-md px-3 py-2 text-[13px] transition-colors duration-200 ease-soft"
               >
                 {l.label}
               </Link>
@@ -60,7 +71,6 @@ export function SiteNav() {
           ))}
         </ul>
 
-        {/* Desktop CTA */}
         <div className="hidden items-center gap-2 md:flex">
           <Button href="#signup" variant="ghost" size="sm">
             Sign in
@@ -70,14 +80,13 @@ export function SiteNav() {
           </Button>
         </div>
 
-        {/* Mobile toggle */}
         <button
           type="button"
           aria-label={open ? "Close menu" : "Open menu"}
           aria-expanded={open}
           aria-controls="mobile-nav-panel"
           onClick={() => setOpen((v) => !v)}
-          className="relative inline-flex h-10 w-10 items-center justify-center rounded-md border border-[var(--line-soft)] bg-ink-800/60 text-muted-100 transition-colors hover:text-muted-50 md:hidden"
+          className="site-nav-toggle relative inline-flex h-10 w-10 items-center justify-center rounded-md border transition-colors md:hidden"
         >
           <svg
             viewBox="0 0 24 24"
@@ -102,43 +111,45 @@ export function SiteNav() {
         </button>
       </nav>
 
-      {/* Mobile panel */}
-      <div
-        id="mobile-nav-panel"
-        ref={panelRef}
-        hidden={!open}
-        className="md:hidden border-t border-[var(--line-soft)] bg-ink-950/95 backdrop-blur-lg"
-      >
-        <div className="container-page py-4">
-          <ul className="flex flex-col">
-            {navLinks.map((l) => (
-              <li key={l.href}>
-                <Link
-                  href={l.href}
-                  onClick={() => setOpen(false)}
-                  className="flex items-center justify-between rounded-md px-3 py-3 text-base text-muted-100 hover:bg-ink-700/50 hover:text-muted-50"
-                >
-                  <span>{l.label}</span>
-                  <span aria-hidden className="text-muted-400">→</span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-          <div className="my-4 hairline" />
-          <div className="flex flex-col gap-2">
-            <Button href="#signup" variant="secondary" size="md" className="w-full">
-              Sign in
-            </Button>
-            <Button href="#signup" size="md" className="w-full">
-              Create profile
-            </Button>
-            <p className="pt-2 text-[12px] text-muted-400">
-              Account flows arrive in a later phase — these buttons show the
-              intended destination.
-            </p>
+      {open && (
+        <div
+          id="mobile-nav-panel"
+          ref={panelRef}
+          className="site-nav-panel md:hidden border-t"
+        >
+          <div className="profile-canvas py-4">
+            <ul className="flex flex-col">
+              {navLinks.map((l) => (
+                <li key={l.href}>
+                  <Link
+                    href={l.href}
+                    onClick={() => setOpen(false)}
+                    className="site-nav-mobile-link flex items-center justify-between rounded-md px-3 py-3 text-base"
+                  >
+                    <span>{l.label}</span>
+                    <span aria-hidden className="site-nav-mobile-arrow">
+                      →
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+            <div className="site-nav-divider my-4" />
+            <div className="flex flex-col gap-2">
+              <Button href="#signup" variant="secondary" size="md" className="w-full">
+                Sign in
+              </Button>
+              <Button href="#signup" size="md" className="w-full">
+                Create profile
+              </Button>
+              <p className="site-nav-footnote pt-2 text-[12px]">
+                Account flows arrive in a later phase — these buttons show the
+                intended destination.
+              </p>
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </header>
   );
 }

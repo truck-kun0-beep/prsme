@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, Instrument_Serif, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
+import { THEME_BOOT_SCRIPT } from "@/lib/themeBoot";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -69,7 +70,15 @@ export default function RootLayout({
     <html
       lang="en"
       className={`${inter.variable} ${display.variable} ${mono.variable}`}
+      data-theme="obsidian"
+      suppressHydrationWarning
     >
+      <head>
+        {/* Pre-paint theme bootstrap to prevent FOUC when navigating to a
+            route whose theme was customized on /studio. Reads the localStorage
+            draft and sets <html data-theme> + the corresponding token block. */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
+      </head>
       <body className="min-h-dvh bg-ink-950 text-muted-100 antialiased">
         <a
           href="#main"

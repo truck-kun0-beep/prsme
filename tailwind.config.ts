@@ -39,8 +39,25 @@ const config: Config = {
       },
       fontFamily: {
         sans: ["var(--font-sans)", "ui-sans-serif", "system-ui", "sans-serif"],
-        display: ["var(--font-display)", "ui-serif", "Georgia", "serif"],
+        display: [
+          "var(--display-family, var(--font-display))",
+          "ui-serif",
+          "Georgia",
+          "serif",
+        ],
         mono: ["var(--font-mono)", "ui-monospace", "monospace"],
+        // Profile-scoped font roles. These resolve against `--pf-font-*`, which
+        // the `.profile-scope` element sets per the active typography preset.
+        // That is what makes the typography picker change real computed fonts
+        // instead of only flipping a radio button.
+        pfDisplay: ["var(--pf-font-display)", "ui-sans-serif", "serif"],
+        pfBody: [
+          "var(--pf-font-body)",
+          "ui-sans-serif",
+          "system-ui",
+          "sans-serif",
+        ],
+        pfMeta: ["var(--pf-font-meta)", "ui-monospace", "monospace"],
       },
       fontSize: {
         // Fluid type scale

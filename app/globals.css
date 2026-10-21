@@ -17,11 +17,22 @@
   --text-muted: #9A9AAA;
   --text-faint: #6F6F80;
 
-  /* Accent */
+  /* Accent (also mapped from presets; the preset tokens redefine these on
+     html[data-theme="<id>"]) */
   --iris-300: #A892FF;
   --iris-400: #8C6CFF;
   --iris-500: #7350F0;
   --iris-600: #5E3FD0;
+
+  /* Preset theme tokens — these are redeclared by `useThemeMount` for each
+     theme on `<html data-theme="<id>">`. We provide defaults so SSR markup
+     never has unresolved variables. */
+  --accent-300: #A892FF;
+  --accent-400: #8C6CFF;
+  --accent-500: #7350F0;
+  --accent-600: #5E3FD0;
+  --bg-tint: transparent;
+  --panel-haze: radial-gradient(60% 50% at 50% 0%, rgba(140,108,255,0.10), transparent 70%);
 
   /* Lines */
   --line-soft: rgba(255, 255, 255, 0.06);
@@ -52,6 +63,73 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+}
+
+/* Phase 3 — Theme bridge.
+ * The studio wraps profile sections in a `[data-theme]` host. We map the
+ * existing Tailwind palettes (iris-*, ink-*, muted-*) onto the theme's
+ * --accent-* and surface tokens so existing classes resolve correctly
+ * inside any theme. We do NOT generate Tailwind class strings from user
+ * input — themes drive everything through these CSS variables. */
+html[data-theme] {
+  --iris-50:  var(--accent-300);
+  --iris-100: var(--accent-300);
+  --iris-200: var(--accent-300);
+  --iris-300: var(--accent-300);
+  --iris-400: var(--accent-400);
+  --iris-500: var(--accent-500);
+  --iris-600: var(--accent-600);
+  --iris-700: var(--accent-600);
+  --iris-800: var(--accent-600);
+  --iris-900: var(--accent-600);
+
+  --ink-950: var(--surface-0);
+  --ink-900: var(--surface-1);
+  --ink-800: var(--surface-2);
+  --ink-700: var(--surface-3);
+  --ink-600: var(--surface-4);
+  --ink-500: var(--surface-4);
+
+  --muted-50:  var(--text-strong);
+  --muted-100: var(--text-default);
+  --muted-200: var(--text-default);
+  --muted-300: var(--text-muted);
+  --muted-400: var(--text-muted);
+  --muted-500: var(--text-faint);
+
+  color-scheme: dark;
+}
+
+/* The Paper theme is a designed light theme; native widgets follow suit. */
+html[data-theme="paper"] {
+  color-scheme: light;
+}
+
+/* Optional background image / tint applied per-theme via the studio. */
+html[data-theme] body {
+  background-image: var(--bg-tint, transparent);
+  background-repeat: var(--bg-repeat, no-repeat);
+  background-attachment: fixed;
+  background-size: var(--bg-size, cover);
+}
+
+/* Phase 3 — Studio surface utilities (used only inside /studio). */
+@layer components {
+  /* Compact chips/badges for the studio controls. */
+  .studio-chip {
+    @apply inline-flex items-center gap-1 rounded-full border border-[var(--line-strong)] bg-[var(--surface-3)] px-2.5 py-0.5 text-[11px] text-[var(--text-muted)];
+  }
+}
+
+/* Phase 3 — Customization overlay.
+ * When <body data-profile-override="active"> is set (a customization is
+ * saved in localStorage), the server-rendered default profile becomes
+ * inert and the customised version takes its place. */
+body[data-profile-override="active"] [data-default-profile] {
+  display: none;
+}
+body:not([data-profile-override="active"]) [data-profile-override-mountpoint] {
+  display: none;
 }
 
 body {
@@ -218,4 +296,837 @@ h3 {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+/* --- Profile-scoped hairline ------------------------------------------ */
+.pf-hairline {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--pf-border-strong) 12%,
+    var(--pf-border-strong) 88%,
+    transparent 100%
+  );
+  height: 1px;
+  width: 100%;
+}
+
+/* --- Site navigation ------------------------------------------------------
+ * Inside `.profile-scope` the nav resolves from the profile tokens so a
+ * theme switch recolours it too. Outside (landing page) it falls back to
+ * the site tokens. Either way, contrast is guaranteed because the values
+ * come from the same token families.
+ */
+.site-nav-scrim {
+  background: color-mix(in oklab, var(--pf-bg, var(--surface-1)) 82%, transparent);
+  border-bottom-color: var(--pf-border, var(--line-soft));
+}
+.site-nav-link {
+  color: var(--pf-text-muted, var(--text-muted));
+}
+.site-nav-link:hover {
+  color: var(--pf-text-strong, var(--text-strong));
+  background: var(--pf-hover, transparent);
+}
+.site-nav-link:focus-visible {
+  outline: 2px solid var(--pf-focus-ring, var(--accent-300));
+  outline-offset: 2px;
+}
+.site-nav-toggle {
+  border-color: var(--pf-border, var(--line-soft));
+  background: var(--pf-surface-2, var(--surface-2));
+  color: var(--pf-text, var(--text-default));
+}
+.site-nav-toggle:hover {
+  border-color: var(--pf-border-strong, var(--line-strong));
+  color: var(--pf-text-strong, var(--text-strong));
+}
+.site-nav-panel {
+  background: var(--pf-bg, var(--surface-0));
+  border-top-color: var(--pf-border, var(--line-soft));
+}
+.site-nav-mobile-link {
+  color: var(--pf-text, var(--text-default));
+}
+.site-nav-mobile-link:hover {
+  background: var(--pf-hover, transparent);
+  color: var(--pf-text-strong, var(--text-strong));
+}
+.site-nav-mobile-arrow {
+  color: var(--pf-text-faint, var(--text-faint));
+}
+.site-nav-divider {
+  height: 1px;
+  background: var(--pf-border, var(--line-soft));
+}
+.site-nav-footnote {
+  color: var(--pf-text-faint, var(--text-faint));
+}
+
+/* --- Print / forced colors ------------------------------------------------ */
+}
+
+/* ========================================================================
+ * Phase 3.1 — Profile-scoped semantic design system
+ * ========================================================================
+ *
+ * The profile renders inside `.profile-scope`, which carries the `--pf-*`
+ * token set (see `lib/profileTheme.ts`) for the chosen theme, typography,
+ * and global layout. Every profile-facing element resolves its colour, type,
+ * and spacing from these tokens — never a hardcoded violet/blue/pink. That is
+ * what makes a theme switch recolour rating badges, interest tags, hover and
+ * focus states, collection borders, section metadata, artwork labels, social
+ * controls, and empty states in one move.
+ *
+ * The tokens are deliberately NOT on `:root`, so the studio editor chrome
+ * keeps its own site tokens and never takes on the profile's theme.
+ */
+
+/* Neutral defaults. A real theme always overrides every one of these. */
+.profile-scope {
+  --pf-font-display: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  --pf-font-body: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  --pf-font-meta: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  --pf-display-tracking: -0.02em;
+  --pf-display-scale: 1;
+  --pf-display-weight: 400;
+  --pf-canvas: 1120px;
+  --pf-section-gap: clamp(3rem, 6vw, 5.5rem);
+  --pf-layout-display-scale: 1;
+  --pf-meta-scale: 1;
+  --pf-identity-width: 40rem;
+
+  --pf-bg: #07070b;
+  --pf-surface-1: #0b0b10;
+  --pf-surface-2: #101018;
+  --pf-surface-3: #161622;
+  --pf-text-strong: #f4f4f6;
+  --pf-text: #e6e6ec;
+  --pf-text-muted: #9a9aaa;
+  --pf-text-faint: #6f6f80;
+  --pf-border: rgba(255, 255, 255, 0.08);
+  --pf-border-strong: rgba(255, 255, 255, 0.14);
+  --pf-accent: #a892ff;
+  --pf-accent-strong: #8c6cff;
+  --pf-accent-fg: #0b0b10;
+  --pf-accent-soft: rgba(168, 146, 255, 0.14);
+  --pf-hover: rgba(168, 146, 255, 0.1);
+  --pf-focus-ring: rgba(168, 146, 255, 0.55);
+  --pf-rating: #c4b5fd;
+  --pf-rating-bg: rgba(168, 146, 255, 0.12);
+  --pf-rating-border: rgba(168, 146, 255, 0.32);
+  --pf-tag-bg: rgba(255, 255, 255, 0.05);
+  --pf-tag-text: #c9c9d4;
+  --pf-tag-border: rgba(255, 255, 255, 0.1);
+  --pf-meta: #6f6f80;
+  --pf-overlay-from: rgba(7, 7, 11, 0.92);
+  --pf-overlay-via: rgba(7, 7, 11, 0.55);
+
+  background-color: var(--pf-bg);
+  background-image: var(--pf-bg-image, none);
+  background-repeat: no-repeat;
+  background-attachment: scroll;
+  color: var(--pf-text);
+  min-height: 100dvh;
+  /* Never let a profile theme leak a stray horizontal scrollbar. */
+  overflow-x: clip;
+}
+
+/* Light themes need light form controls + scrollbars to stay coherent. */
+.profile-scope[data-tone="light"] {
+  color-scheme: light;
+}
+.profile-scope[data-tone="dark"] {
+  color-scheme: dark;
+}
+
+/* --- Content canvas driven by the global layout preset ------------------ */
+.profile-canvas {
+  width: 100%;
+  margin-inline: auto;
+  padding-inline: 1.25rem;
+  max-width: var(--pf-canvas);
+}
+@media (min-width: 768px) {
+  .profile-canvas {
+    padding-inline: 2rem;
+  }
+}
+
+/* --- Typography roles --------------------------------------------------- */
+/* Display: profile name, section headings, collection headings. */
+.pf-display {
+  font-family: var(--pf-font-display);
+  font-weight: var(--pf-display-weight);
+  letter-spacing: var(--pf-display-tracking);
+  color: var(--pf-text-strong);
+  font-size: calc(1em * var(--pf-display-scale) * var(--pf-layout-display-scale));
+}
+
+/* The profile display name gets the fluid ramp so it stays expressive. */
+.pf-display-name {
+  font-family: var(--pf-font-display);
+  font-weight: var(--pf-display-weight);
+  letter-spacing: var(--pf-display-tracking);
+  color: var(--pf-text-strong);
+  font-size: calc(
+    clamp(2.1rem, 6.2vw, 4.25rem) * var(--pf-layout-display-scale)
+  );
+  line-height: 1.04;
+  overflow-wrap: break-word;
+}
+
+/* Body: biography, review excerpts, long-form copy. */
+.pf-body {
+  font-family: var(--pf-font-body);
+  color: var(--pf-text);
+}
+
+/* Meta: eyebrows, item metadata, counts, tags. */
+.pf-meta {
+  font-family: var(--pf-font-meta);
+  font-size: calc(0.8125rem * var(--pf-meta-scale));
+  color: var(--pf-meta);
+}
+
+/* Eyebrow label above section headings. */
+.pf-eyebrow {
+  font-family: var(--pf-font-meta);
+  font-size: calc(0.75rem * var(--pf-meta-scale));
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  color: var(--pf-accent);
+}
+
+/* --- Semantic component classes ----------------------------------------- */
+
+/* Rating badge
+ *
+ * Phase 4.2 — legibility pass. The old chip was a pale violet glyph on a
+ * translucent violet pill at 11px (~2.4:1 on Obsidian, unreadable on Paper).
+ * The chip now uses an *opaque* surface lifted from the active theme, a solid
+ * border, a heavier weight, and tabular numerals, so a column of scores reads
+ * cleanly and the value survives on top of a bright poster.
+ */
+.pf-rating {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border-radius: 9999px;
+  font-family: var(--pf-font-meta);
+  font-weight: 600;
+  line-height: 1;
+  color: var(--pf-rating);
+  background: var(--pf-rating-solid);
+  border: 1px solid var(--pf-rating-border-strong);
+  white-space: nowrap;
+  /* Sit above artwork so it is never painted behind a poster. */
+  isolation: isolate;
+}
+.pf-rating-star {
+  font-size: 1.05em;
+  line-height: 1;
+  opacity: 0.95;
+}
+.pf-rating-value {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+.pf-rating-of {
+  font-weight: 500;
+  opacity: 0.7;
+}
+/* Three sizes. `sm` is used over posters and in list rows; it is still a
+   legible size (11px) because the *surface* now provides the contrast. */
+.pf-rating-sm {
+  padding: 0.2rem 0.45rem;
+  font-size: 11px;
+}
+.pf-rating-md {
+  padding: 0.28rem 0.6rem;
+  font-size: 12px;
+}
+.pf-rating-lg {
+  padding: 0.38rem 0.75rem;
+  font-size: 13px;
+}
+
+/* Interest tags */
+.pf-tag {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 9999px;
+  border: 1px solid var(--pf-tag-border);
+  background: var(--pf-tag-bg);
+  color: var(--pf-tag-text);
+  font-family: var(--pf-font-meta);
+  font-size: calc(0.75rem * var(--pf-meta-scale));
+  padding: 0.3rem 0.7rem;
+}
+
+/* Interactive link / button */
+.pf-link {
+  color: var(--pf-text);
+  border-radius: 0.375rem;
+  transition:
+    color 160ms ease,
+    background-color 160ms ease,
+    border-color 160ms ease;
+}
+.pf-link:hover {
+  color: var(--pf-text-strong);
+  background-color: var(--pf-hover);
+}
+.pf-link:focus-visible {
+  outline: 2px solid var(--pf-focus-ring);
+  outline-offset: 2px;
+}
+
+/* Icon-only social control */
+.pf-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.625rem;
+  border: 1px solid var(--pf-border);
+  background: var(--pf-surface-2);
+  color: var(--pf-text-muted);
+  transition:
+    color 160ms ease,
+    background-color 160ms ease,
+    border-color 160ms ease,
+    transform 160ms ease;
+}
+.pf-icon-btn:hover {
+  color: var(--pf-text-strong);
+  background: var(--pf-hover);
+  border-color: var(--pf-border-strong);
+  transform: translateY(-1px);
+}
+.pf-icon-btn:focus-visible {
+  outline: 2px solid var(--pf-focus-ring);
+  outline-offset: 2px;
+}
+
+/* Collection frame */
+.pf-collection {
+  border: 1px solid var(--pf-border);
+  border-radius: 1rem;
+  background: var(--pf-surface-1);
+}
+
+/* Collection metadata line (item count / visibility) */
+.pf-collection-meta {
+  font-family: var(--pf-font-meta);
+  font-size: calc(0.75rem * var(--pf-meta-scale));
+  color: var(--pf-meta);
+  white-space: nowrap;
+}
+
+/* Section heading block — spacing driven by the global layout preset. */
+.pf-section {
+  padding-block: calc(var(--pf-section-gap) * 0.72);
+}
+
+/* Empty state */
+.pf-empty {
+  border: 1px dashed var(--pf-border-strong);
+  border-radius: 0.875rem;
+  padding: 2rem 1.25rem;
+  text-align: center;
+  color: var(--pf-text-muted);
+  font-family: var(--pf-font-body);
+  background: var(--pf-surface-1);
+}
+
+/* --- Media shelf (poster-grid collection) -------------------------------- */
+.pf-shelf {
+  display: flex;
+  gap: 1rem;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: thin;
+  /* Contain the rail's own overflow; never widen the document. */
+  max-width: 100%;
+  padding-bottom: 0.5rem;
+  scroll-padding-inline: 0.25rem;
+}
+.pf-shelf > * {
+  scroll-snap-align: start;
+}
+@media (min-width: 768px) {
+  .pf-shelf {
+    scroll-snap-type: none;
+    gap: 1.25rem;
+  }
+}
+/* Hide the scrollbar chrome but keep the rail scrollable. */
+.pf-shelf::-webkit-scrollbar {
+  height: 8px;
+}
+.pf-shelf::-webkit-scrollbar-thumb {
+  background: var(--pf-border-strong);
+  border-radius: 9999px;
+}
+.pf-shelf::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Poster card — readable minimum width, preserved 2:3 ratio.
+ *
+ * Sizing rule: the card must be wide enough to keep a poster readable but
+ * narrow enough that two cards plus the gap fit inside a 390 px phone
+ * (≈350 px of content width after the profile's page padding). `min(42vw,
+ * 10.75rem)` gives ≈164 px on a 390 px screen → 2 × 164 + 16 gap = 344 px,
+ * so two full cards are visible side by side without document overflow.
+ */
+.pf-poster-card {
+  flex: 0 0 auto;
+  width: min(42vw, 10.75rem);
+  min-width: 7.5rem;
+  max-width: 11.875rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+@media (min-width: 768px) {
+  .pf-poster-card {
+    width: 10.75rem;
+    min-width: 10.5rem;
+    max-width: 11.875rem;
+  }
+}
+
+/* The artwork frame owns the 2:3 poster ratio. It is sized by the card
+   width, so posters never distort and titles live *below* the frame. */
+.pf-poster-frame {
+  position: relative;
+  overflow: hidden;
+  border-radius: 0.625rem;
+  border: 1px solid var(--pf-border);
+  background: var(--pf-surface-2);
+  aspect-ratio: 2 / 3;
+  flex: 0 0 auto;
+  transition:
+    transform 260ms var(--ease-soft),
+    border-color 200ms ease;
+}
+.pf-poster-card:hover .pf-poster-frame {
+  transform: translateY(-3px);
+  border-color: var(--pf-border-strong);
+}
+.pf-poster-frame > [data-source] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* --- Compact collection ----------------------------------------------
+ *
+ * Phase 4.2 — explicit four-column row, never `space-between`.
+ *
+ *   `index | artwork | title + metadata | rating`
+ *
+ * `justify-content: space-between` looked identical at 1280px but pushed the
+ * index column to the far left edge at 360px; this grid fixes the column
+ * positions at every width and prevents the gap from collapsing to zero or
+ * exploding into whitespace. The artwork is a small square that drops to
+ * `display: none` only on screens where the rating also drops, so on a 390px
+ * phone every row still feels intentional.
+ */
+.pf-compact-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.pf-compact-row {
+  display: grid;
+  grid-template-columns: 1.5rem 3.5rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding-block: 0.85rem;
+  border-top: 1px solid var(--pf-border);
+}
+.pf-compact-row:first-child {
+  border-top: 0;
+}
+.pf-compact-index {
+  font-family: var(--pf-font-meta);
+  font-size: calc(0.6875rem * var(--pf-meta-scale));
+  color: var(--pf-meta);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.pf-compact-main {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+.pf-compact-side {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  justify-self: end;
+}
+/* Narrow phones: hide the thumbnail so the title fits comfortably. The row
+   still reads "01 / The Long Title / 9.2" even on a 360px screen. */
+@media (max-width: 420px) {
+  .pf-compact-row {
+    grid-template-columns: 1.5rem minmax(0, 1fr) auto;
+  }
+  .pf-compact-main > .pf-featured-thumb {
+    display: none;
+  }
+}
+
+/* --- Featured collection ------------------------------------------------ */
+/*
+ * Phase 4.2 — rewritten layout.
+ *
+ * The old composition shared one flow between the hero artwork and the
+ * secondary list. Absolutely-positioned layers then painted over each other,
+ * which produced the "image of one item overlapping text of another"
+ * composition. This block treats the hero and the list as *two separate grid
+ * children* and rules them with a `z-index` chain so paint order is
+ * unambiguous:
+ *
+ *   .pf-featured        — two-column grid (one column when stacked)
+ *   .pf-featured-hero   — wraps the hero card only
+ *   .pf-featured-list   — the secondary items, in their own stacking context
+ */
+.pf-featured {
+  display: grid;
+  gap: 1.25rem;
+}
+@media (min-width: 1024px) {
+  .pf-featured {
+    grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+    gap: 1.75rem;
+    align-items: start;
+  }
+}
+
+/*
+ * The hero frame is a sized box (2:3). Its own children are scoped via `> *`
+ * so the trailing `Artwork`, the gradient scrim, and the copy overlay each
+ * know exactly which slot they occupy.
+ */
+.pf-featured-hero {
+  min-width: 0;
+}
+.pf-featured-hero-frame {
+  position: relative;
+  overflow: hidden;
+  border-radius: 0.875rem;
+  border: 1px solid var(--pf-border);
+  background: var(--pf-surface-2);
+  aspect-ratio: 3 / 4;
+  max-height: 36rem;
+  margin-inline: auto;
+  width: 100%;
+  isolation: isolate;
+}
+@media (min-width: 1024px) {
+  .pf-featured-hero-frame {
+    max-height: 44rem;
+    aspect-ratio: 4 / 5;
+  }
+}
+.pf-featured-hero-frame > [data-source] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+/*
+ * Explicit stacking chain. Without these, `Artwork` (a plain `div`) and the
+ * copy overlay paint in DOM order — which happened to work — but any future
+ * child would silently drop into the wrong layer. Declaring it means the
+ * order is a property of the layout, not an accident.
+ */
+.pf-featured-hero-frame > [data-source] {
+  z-index: 1;
+}
+.pf-featured-hero-frame > .pf-featured-scrim {
+  z-index: 2;
+}
+.pf-featured-hero-frame > .pf-featured-copy {
+  z-index: 3;
+}
+
+/* Scrim sits *under* the copy; the copy is never hidden behind artwork. */
+.pf-featured-scrim {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  height: 70%;
+  background: linear-gradient(
+    to top,
+    var(--pf-overlay-from) 0%,
+    var(--pf-overlay-via) 55%,
+    transparent 100%
+  );
+  pointer-events: none;
+}
+.pf-featured-copy {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: flex-start;
+}
+@media (min-width: 768px) {
+  .pf-featured-copy {
+    padding: 1.75rem;
+  }
+}
+
+.pf-featured-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* --- Featured / Compact thumbnails ---------------------------------------
+ * A fixed box with `isolation`, so an artwork that fails to decode still
+ * leaves a correctly-sized region rather than collapsing the row. */
+.pf-featured-thumb {
+  position: relative;
+  overflow: hidden;
+  border-radius: 0.5rem;
+  border: 1px solid var(--pf-border);
+  flex-shrink: 0;
+  width: 3.25rem;
+  height: 4.75rem;
+  background: var(--pf-surface-2);
+}
+.pf-featured-thumb > [data-source] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.pf-compact-thumb {
+  position: relative;
+  overflow: hidden;
+  border-radius: 0.375rem;
+  border: 1px solid var(--pf-border);
+  flex-shrink: 0;
+  width: 3rem;
+  height: 3rem;
+  background: var(--pf-surface-2);
+}
+.pf-compact-thumb > [data-source] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* --- Review affordance ---------------------------------------------------
+ * Phase 4.2 — the excerpt itself is the link (no separate button). */
+.pf-review-row {
+  color: var(--pf-meta);
+}
+.pf-review-row:hover,
+.pf-review-row:focus-visible {
+  color: var(--pf-text-strong);
+}
+.pf-featured-review {
+  width: 100%;
+}
+
+/* --- Soundtrack List (music collections) --------------------------------
+ * Vertical, page-scrolling list of compact soundtrack rows. Deliberately a
+ * list, not a carousel: long track titles must stay readable. */
+.pf-soundtrack-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.pf-soundtrack-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.875rem;
+  padding-block: 0.85rem;
+  border-top: 1px solid var(--pf-border);
+}
+.pf-soundtrack-row:first-child {
+  border-top: 0;
+}
+.pf-soundtrack-thumb {
+  position: relative;
+  overflow: hidden;
+  border-radius: 0.5rem;
+  border: 1px solid var(--pf-border);
+  flex-shrink: 0;
+  width: 3.25rem;
+  height: 3.25rem;
+  background: var(--pf-surface-2);
+}
+.pf-soundtrack-thumb > [data-source] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.pf-soundtrack-meta {
+  min-width: 0;
+}
+.pf-soundtrack-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  flex-shrink: 0;
+  border-radius: 0.375rem;
+  border: 1px solid var(--pf-border);
+  color: var(--pf-text-muted);
+  transition: color 200ms ease-soft, border-color 200ms ease-soft,
+    background-color 200ms ease-soft;
+}
+.pf-soundtrack-link:hover {
+  color: var(--pf-accent);
+  border-color: var(--pf-border-strong);
+  background: var(--pf-hover);
+}
+.pf-soundtrack-link:focus-visible {
+  outline: 2px solid var(--pf-focus-ring);
+  outline-offset: 2px;
+}
+@media (min-width: 640px) {
+  .pf-soundtrack-row {
+    padding-block: 1rem;
+    gap: 1rem;
+  }
+  .pf-soundtrack-thumb {
+    width: 4rem;
+    height: 4rem;
+  }
+}
+
+/* --- Poster rating placement ---------------------------------------------
+ * The badge sits over the poster's top-left corner, sized so it never covers
+ * the title text below the frame. */
+.pf-poster-rating {
+  position: absolute;
+  top: 0.5rem;
+  left: 0.5rem;
+  z-index: 2;
+  /* Over artwork, the pill needs its own backdrop to stay legible against a
+     bright poster; the theme tokens already provide a translucent surface. */
+  backdrop-filter: blur(6px);
+}
+
+/* --- Follower / following stats ------------------------------------------ */
+.pf-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+  align-items: baseline;
+}
+.pf-stat {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.375rem;
+}
+.pf-stat-value {
+  font-family: var(--pf-font-meta);
+  font-weight: 600;
+  color: var(--pf-text-strong);
+  font-size: 1rem;
+  font-variant-numeric: tabular-nums;
+}
+.pf-stat-label {
+  font-family: var(--pf-font-meta);
+  font-size: calc(0.75rem * var(--pf-meta-scale));
+  color: var(--pf-meta);
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+}
+
+/* --- Soundtrack card ----------------------------------------------------- */
+.pf-soundtrack {
+  position: relative;
+  overflow: hidden;
+  border-radius: 1rem;
+  border: 1px solid var(--pf-border);
+  background: var(--pf-surface-2);
+}
+.pf-soundtrack-halo {
+  position: absolute;
+  right: -4rem;
+  top: -4rem;
+  width: 11rem;
+  height: 11rem;
+  pointer-events: none;
+  opacity: 0.22;
+  background: radial-gradient(
+    closest-side,
+    var(--pf-accent),
+    transparent 70%
+  );
+}
+
+/* --- Utility: clamp long titles without shrinking the type --------------- */
+.pf-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.pf-clamp-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+/* --- Global layout preset: header split ---------------------------------- */
+.profile-scope[data-layout-split="stacked"] .pf-header {
+  grid-template-columns: minmax(0, 1fr);
+}
+@media (min-width: 768px) {
+  .profile-scope[data-layout-split="side"] .pf-header {
+    grid-template-columns: minmax(0, 15rem) minmax(0, 1fr);
+    column-gap: 2.5rem;
+  }
+  .profile-scope[data-layout-split="stacked"] .pf-header {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Mobile-first stacked header: the avatar never collides with the bio. */
+.pf-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1.5rem;
+  align-items: start;
+}
+.pf-header-identity {
+  min-width: 0;
+}
+
+/* --- Print / forced colors ------------------------------------------------ */
+@media (forced-colors: active) {
+  .profile-scope {
+    border: 1px solid CanvasText;
+  }
 }

@@ -21,10 +21,45 @@ export type Palette =
 export type MediaKind =
   | "movie"
   | "tv"
-  | "kdrama"
   | "music"
   | "manga"
   | "book";
+
+/**
+ * Mapping rule from the provider/catalogue kind to the profile card kind.
+ * PRSME keeps a single `music` kind on `ProfileMediaItem` so demo items
+ * never shift, while the picker still distinguishes songs and albums.
+ */
+export function profileKindFor(
+  pickerKind: "movie" | "tv" | "song" | "album" | "manga" | "book",
+): MediaKind {
+  if (pickerKind === "song" || pickerKind === "album") return "music";
+  return pickerKind;
+}
+
+/**
+ * Book-format subtype. Defaults to "standard" when absent.
+ *
+ * A light novel is a book-format *style*, not a separate catalogue: it shares
+ * the Books picker, artwork pipeline, ratings, reviews, and layouts. The
+ * subtype exists only so the UI can label it honestly.
+ */
+export type BookFormat = "standard" | "light-novel";
+
+/** Layout identifiers accepted by every collection renderer. */
+export type CollectionLayoutId =
+  | "poster-grid"
+  | "featured"
+  | "compact"
+  | "soundtrack-list";
+
+/** Human-readable layout names for the studio selector. */
+export const COLLECTION_LAYOUT_LABELS: Record<CollectionLayoutId, string> = {
+  "poster-grid": "Poster grid",
+  featured: "Featured",
+  compact: "Compact",
+  "soundtrack-list": "Soundtrack list",
+};
 
 export interface SocialLink {
   platform: "facebook" | "instagram" | "snapchat" | "linkedin";
@@ -39,6 +74,16 @@ export interface ProfileMediaItem {
   /** Sub-title (e.g. director, artist, author). Optional. */
   byline?: string;
   kind: MediaKind;
+  /**
+   * Phase 4.2 — book-format subtype.
+   *
+   * A light novel is a *book*, not a separate catalogue: it shares the Books
+   * picker, artwork, rating, review, and layout behaviour. The subtype only
+   * exists so the UI can label it honestly and so a Books shelf can mix
+   * standard books and light novels without pretending they are the same
+   * thing. Absent means "standard book".
+   */
+  format?: BookFormat;
   /** The owner's personal rating on a 0–10 scale. Optional. */
   myRating?: number;
   /** Owner's short written review. Optional. */
@@ -47,6 +92,28 @@ export interface ProfileMediaItem {
   year?: number;
   /** Optional artwork palette used by `Artwork.tsx`. */
   palette: Palette;
+  /**
+   * Phase 4 — when the item was added via the media picker, the provider
+   * identity is preserved so the same record can be re-resolved. Items
+   * without `provider` are demo items that were hand-authored.
+   */
+  provider?: string;
+  providerId?: string;
+  /** Provider-attributed artwork URL, if any. */
+  coverUrl?: string;
+  coverSource?: string;
+  externalUrl?: string;
+  /**
+   * Optional longer review metadata: a review title and a spoiler indicator.
+   * Keeping these separate from `byline` so legacy demos stay tidy.
+   */
+  myReviewTitle?: string;
+  myReviewSpoiler?: boolean;
+  /**
+   * ISO timestamp of the last time the owner updated the review. Browser-only;
+   * never used for gating.
+   */
+  myReviewUpdatedAt?: string;
 }
 
 export interface ProfileCollection {
@@ -55,11 +122,26 @@ export interface ProfileCollection {
   name: string;
   /** A short description shown beneath the name. Optional. */
   description?: string;
-  /** Layout hint the consumer can use to vary visual treatments. */
-  layout: "poster-grid" | "featured" | "compact";
+  /**
+   * Layout hint the consumer can use to vary visual treatments.
+   *
+   * Phase 4.2 adds `soundtrack-list` — a vertical list of compact soundtrack
+   * cards, intended for music collections. Every layout is safe on any
+   * collection; `soundtrack-list` simply reads best when the items are songs
+   * or albums.
+   */
+  layout: CollectionLayoutId;
   /** Future-friendly: "public" | "followers" | "private". */
   visibility: "public" | "followers" | "private";
   items: ProfileMediaItem[];
+  /**
+   * Phase 4 — ids the owner explicitly removed from this shelf.
+   *
+   * The public profile merges demo items with draft items (so a fresh draft
+   * never wipes the demo shelves). Removal therefore has to be recorded, or a
+   * removed demo item would reappear on every render.
+   */
+  removedItemIds?: string[];
 }
 
 export interface ActivityEntry {
@@ -101,6 +183,8 @@ export interface ProfileSoundtrack {
    * fabricate ids; the URL itself is the source of truth.
    */
   trackUrl: string;
+  /** Catalogue track or album id used to render the cover artwork inline. */
+  trackId?: string;
   /** Display title shown in the soundtrack card (track or album name). */
   trackTitle: string;
   /** Display artist name(s). */
@@ -138,6 +222,18 @@ export interface ProfileSoundtrack {
   externalUrl?: string;
 }
 
+export const PALETTE_NAMES = new Set<Palette>([
+  "amber",
+  "iris",
+  "rose",
+  "cyan",
+  "forest",
+  "sand",
+  "mono",
+  "violet",
+  "rust",
+]);
+
 export interface ProfileOwner {
   /** URL segment for the profile. Lowercase, no spaces. */
   username: string;
@@ -147,6 +243,12 @@ export interface ProfileOwner {
   location?: string;
   pronouns?: string;
   avatarPalette: Palette;
+  /**
+   * Optional override for the avatar. When present, the header prefers
+   * this data URL over the palette. Used by the customization studio;
+   * kept on the same typed shape so /u/noir and /studio stay in sync.
+   */
+  avatarDataUrl?: string | null;
   tags: string[];
   socials: SocialLink[];
   collections: ProfileCollection[];
@@ -154,6 +256,23 @@ export interface ProfileOwner {
   clicks: ClicksPhoto[];
   /** Opt-in profile soundtrack. When undefined the player is not rendered. */
   soundtrack?: ProfileSoundtrack;
+  /**
+   * Demo follower/following counts.
+   *
+   * Phase 3.1 has no backend, so these are clearly-labelled fictional demo
+   * numbers that exist only so the profile layout can be evaluated. They are
+   * intentionally *not* part of `ProfileDraft` — follower graphs are not
+   * owner-customizable, and a real implementation will source them from the
+   * database instead of local storage.
+   */
+  socialStats?: ProfileSocialStats;
+}
+
+export interface ProfileSocialStats {
+  followers: number;
+  following: number;
+  /** Marks the numbers as demo data in the UI and for assistive tech. */
+  isDemo: boolean;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -229,18 +348,18 @@ const collections: ProfileCollection[] = [
     ],
   },
   {
-    id: "col-kdrama",
-    name: "K-Dramas for Rainy Days",
+    id: "col-tv",
+    name: "TV Series for Rainy Days",
     description:
-      "Slow-burners, melancholic leads, and endings that don't shout.",
+      "Series from anywhere — slow-burners, melancholic leads, endings that don't shout.",
     layout: "featured",
     visibility: "public",
     items: [
       {
         id: "kd-camellia",
         title: "When the Camellia Blooms",
-        byline: "KBS · 2019",
-        kind: "kdrama",
+        byline: "KBS (Korean) · 2019",
+        kind: "tv",
         myRating: 9.5,
         myReview:
           "The kind of show that teaches you how to root for small kindnesses.",
@@ -250,8 +369,8 @@ const collections: ProfileCollection[] = [
       {
         id: "kd-liberation",
         title: "My Liberation Notes",
-        byline: "JTBC · 2022",
-        kind: "kdrama",
+        byline: "JTBC (Korean) · 2022",
+        kind: "tv",
         myRating: 9.6,
         myReview:
           "Paces itself like a long walk. Not for everyone. For me, perfect.",
@@ -261,8 +380,8 @@ const collections: ProfileCollection[] = [
       {
         id: "kd-twentyfive",
         title: "Twenty-Five, Twenty-One",
-        byline: "tvN · 2022",
-        kind: "kdrama",
+        byline: "tvN (Korean) · 2022",
+        kind: "tv",
         myRating: 9.0,
         year: 2022,
         palette: "rose",
@@ -270,8 +389,8 @@ const collections: ProfileCollection[] = [
       {
         id: "kd-moveheaven",
         title: "Move to Heaven",
-        byline: "Netflix · 2021",
-        kind: "kdrama",
+        byline: "Netflix (Korean) · 2021",
+        kind: "tv",
         myRating: 8.9,
         year: 2021,
         palette: "forest",
@@ -279,8 +398,8 @@ const collections: ProfileCollection[] = [
       {
         id: "kd-mymister",
         title: "My Mister",
-        byline: "tvN · 2018",
-        kind: "kdrama",
+        byline: "tvN (Korean) · 2018",
+        kind: "tv",
         myRating: 9.3,
         year: 2018,
         palette: "violet",
@@ -520,9 +639,18 @@ export const noirProfile: ProfileOwner = {
   username: "noir",
   displayName: "Noir Aldridge",
   bio: "Filmmaker, occasional photographer, frequent over-reader. I keep shelves for the things that teach me how to be slower.",
-  location: "Berlin · she/her",
+  location: "Berlin",
   pronouns: "she/her",
   avatarPalette: "iris",
+  /**
+   * Fictional demo counts so the follower/following row can be evaluated
+   * before the backend exists. Not part of the customizable draft.
+   */
+  socialStats: {
+    followers: 1284,
+    following: 312,
+    isDemo: true,
+  },
   tags: [
     "Independent film",
     "Korean drama",

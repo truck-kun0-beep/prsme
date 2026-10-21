@@ -26,7 +26,7 @@ export function Wordmark({
     <span className={`inline-flex items-center gap-2 ${className}`}>
       <PrismSymbol className={sz.symbol} aria-hidden />
       <span
-        className={`${sz.text} font-semibold tracking-[0.18em] text-muted-50`}
+        className={`${sz.text} font-semibold tracking-[0.18em] text-[var(--pf-text-strong,theme(colors.muted.50))]`}
       >
         PRSME
       </span>

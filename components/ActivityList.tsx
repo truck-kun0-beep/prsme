@@ -1,3 +1,5 @@
+"use client";
+
 import { Artwork } from "./Artwork";
 import type { ActivityEntry } from "@/lib/noirProfile";
 
@@ -9,33 +11,57 @@ const kindLabel: Record<ActivityEntry["kind"], string> = {
   updated: "Updated",
 };
 
+/**
+ * ActivityList — the profile's "recently" ledger.
+ *
+ * Renders inside `.profile-scope`, so every colour resolves from the
+ * `--pf-*` tokens. Phase 3 hard-coded `text-iris-300` / `bg-ink-800` here,
+ * which is why activity stayed violet under Midnight Blue and washed out
+ * under Paper.
+ */
 export function ActivityList({ entries }: { entries: ActivityEntry[] }) {
+  if (entries.length === 0) {
+    return (
+      <div className="pf-empty">
+        <p className="pf-body text-[14px]">No recent activity yet.</p>
+      </div>
+    );
+  }
+
   return (
-    <ul className="flex min-w-0 flex-col divide-y divide-[var(--line-soft)] border-y border-[var(--line-soft)]">
+    <ul
+      className="pf-collection divide-y divide-[var(--pf-border)] overflow-hidden"
+      data-testid="activity-list"
+    >
       {entries.map((e) => (
         <li
           key={e.id}
-          className="grid grid-cols-[auto,1fr] items-start gap-4 py-4 first:pt-5 last:pb-5 sm:grid-cols-[auto,1fr,auto] sm:gap-6"
+          className="grid grid-cols-[auto_1fr] items-start gap-3 px-3 py-3.5 transition-colors hover:bg-[var(--pf-hover)] sm:grid-cols-[auto_1fr_auto] sm:gap-5 sm:px-4"
         >
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-[var(--line-soft)] bg-ink-800/60 text-[10px] uppercase tracking-[0.18em] text-iris-300">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-[var(--pf-border)] bg-[var(--pf-surface-2)] text-[10px] uppercase tracking-[0.18em] text-[var(--pf-accent)]">
             <span className="sr-only">{kindLabel[e.kind]}</span>
-            <span aria-hidden className="font-mono">
+            <span aria-hidden className="pf-meta">
               {kindLabel[e.kind].slice(0, 2)}
             </span>
           </div>
+
           <div className="min-w-0">
-            <p className="text-[14px] leading-relaxed text-muted-100">{e.text}</p>
-            <div className="mt-1 flex items-center gap-3 text-[12px] text-muted-400">
-              <span className="font-mono">{e.when}</span>
+            <p className="pf-body text-[14px] leading-relaxed">{e.text}</p>
+            <div className="pf-meta mt-1 flex items-center gap-3">
+              <span>{e.when}</span>
               {e.item && (
-                <span className="truncate">
-                  · <span className="text-muted-200">{e.item.title}</span>
+                <span className="truncate text-[var(--pf-text-muted)]">
+                  · {e.item.title}
                 </span>
               )}
             </div>
           </div>
+
           {e.item && (
-            <div className="hidden h-12 w-12 shrink-0 overflow-hidden rounded-md sm:block">
+            <div
+              className="hidden h-12 w-12 shrink-0 overflow-hidden rounded-md border border-[var(--pf-border)] sm:block"
+              aria-hidden
+            >
               <Artwork palette={e.item.palette} ratio="auto" />
             </div>
           )}

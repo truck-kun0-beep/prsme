@@ -20,7 +20,7 @@ export interface DemoItem {
 export const demoProfile = {
   username: "@noor.k",
   displayName: "Noor K.",
-  bio: "Quiet films, louder K-dramas. Editors' cuts. Late-night K-pop. Always reading.",
+  bio: "Quiet films, slower series, late-night K-pop. Always reading.",
   location: "Berlin · she/her",
   followerCount: 2483,
   followingCount: 187,
@@ -30,7 +30,7 @@ export const demoProfile = {
 export const demoRecentlyWatched: DemoItem[] = [
   { id: "rw-1", title: "Pastel City", kind: "film", rating: 9.1, year: 2024, palette: "iris" },
   { id: "rw-2", title: "A Quiet Frequency", kind: "series", rating: 8.6, palette: "cyan" },
-  { id: "rw-3", title: "When the Camellia Blooms", kind: "kdrama", rating: 9.4, palette: "rose" },
+  { id: "rw-3", title: "When the Camellia Blooms", kind: "series", rating: 9.4, palette: "rose" },
   { id: "rw-4", title: "Long After Midnight", kind: "music", rating: 9.0, palette: "violet" },
 ];
 
@@ -46,13 +46,13 @@ export const demoCollections: { name: string; count: number; tone: string; cover
     ],
   },
   {
-    name: "K-dramas that understood me",
+    name: "TV Series that understood me",
     count: 18,
     tone: "Petal Static",
     cover: [
-      { id: "c2-1", title: "Twenty-Five, Twenty-One", kind: "kdrama", palette: "rose" },
-      { id: "c2-2", title: "My Liberation Notes", kind: "kdrama", palette: "amber" },
-      { id: "c2-3", title: "Move to Heaven", kind: "kdrama", palette: "forest" },
+      { id: "c2-1", title: "Twenty-Five, Twenty-One", kind: "series", palette: "rose" },
+      { id: "c2-2", title: "My Liberation Notes", kind: "series", palette: "amber" },
+      { id: "c2-3", title: "Move to Heaven", kind: "series", palette: "forest" },
     ],
   },
   {

@@ -126,7 +126,7 @@ export function ThemePicker() {
             className="mt-2 text-[13px] leading-relaxed"
             style={{ color: active.mute }}
           >
-            Quiet films, louder K-dramas. Editors&apos; cuts. Late-night K-pop.
+            Quiet films, slower series, late-night K-pop.
           </p>
           <div className="mt-4 flex items-center gap-2">
             <button
