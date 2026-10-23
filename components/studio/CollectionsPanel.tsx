@@ -20,7 +20,8 @@ import type { MediaKindId, MediaRecord } from "@/lib/media/types";
 import { PanelCard, FieldGroup, TextInput, TextArea, Select } from "./StudioFields";
 import { IconUp, IconDown, IconTrash, IconPlus, IconX, IconSearch } from "./StudioIcons";
 import { MediaPicker } from "./MediaPicker";
-import { ReviewEditor, type ReviewDraft, reviewFromItem, validateReview } from "./ReviewEditor";
+import { ReviewDrawer } from "./ReviewDrawer";
+import type { ReviewDraft, ReviewSaveTarget } from "./ReviewEditor";
 
 /**
  * Mini-preview illustrations for each layout, rendered inline in the studio
@@ -188,7 +189,20 @@ export function CollectionsPanel() {
     update({ collections: removeItemFromCollection(list, collectionId, itemId) });
   }
 
-  function setReview(itemId: string, review: ReviewDraft) {
+  /**
+   * Write a review onto a collection item.
+   *
+   * The local copy keeps the collection card in step with what the owner
+   * just wrote. For an authenticated owner the authoritative copy lives in
+   * the shared `media_reviews` table — the drawer writes that FIRST and only
+   * calls this once the database has confirmed it, so a failed write never
+   * shows a published state.
+   */
+  function setReview(
+    itemId: string,
+    review: ReviewDraft,
+    target: ReviewSaveTarget,
+  ) {
     const patch: {
       myRating?: number;
       myReviewTitle?: string;
@@ -200,6 +214,7 @@ export function CollectionsPanel() {
     if (review.body.trim()) patch.myReview = review.body.trim();
     else patch.myReview = undefined;
     patch.myReviewSpoiler = review.spoiler;
+    void target;
     update({ collections: applyReviewToItem(list, itemId, patch) });
   }
 
@@ -227,7 +242,9 @@ export function CollectionsPanel() {
                 onRemove={() => remove(i)}
                 onAddItem={(record) => addItem(c.id, record)}
                 onRemoveItem={(itemId) => removeItem(c.id, itemId)}
-                onSetReview={(itemId, review) => setReview(itemId, review)}
+                onSetReview={(itemId, review, target) =>
+                  setReview(itemId, review, target)
+                }
                 isNewCollection={c.id.startsWith("col-new-")}
               />
             </li>
@@ -291,7 +308,7 @@ function CollectionEditor({
     format?: "standard" | "light-novel",
   ) => void;
   onRemoveItem: (itemId: string) => void;
-  onSetReview: (itemId: string, review: ReviewDraft) => void;
+  onSetReview: (itemId: string, review: ReviewDraft, target: ReviewSaveTarget) => void;
   isNewCollection: boolean;
 }) {
   const [confirmRemove, setConfirmRemove] = useState(false);
@@ -324,8 +341,8 @@ function CollectionEditor({
       {reviewingItem && (
         <ReviewDrawer
           item={reviewingItem}
-          onSave={(review) => {
-            onSetReview(reviewingItem.id, review);
+          onSave={(review, target) => {
+            onSetReview(reviewingItem.id, review, target);
             setReviewingItemId(null);
           }}
           onClose={() => setReviewingItemId(null)}
@@ -544,50 +561,7 @@ function CollectionEditor({
   );
 }
 
-/**
- * ReviewDrawer — opens the review editor inline inside the collection editor.
- * (The dialog lives in the same DOM tree so the studio grid layout doesn't
- * shift; we have already proven dialogs work in Profile 3.1.)
- */
-function ReviewDrawer({
-  item,
-  onSave,
-  onClose,
-}: {
-  item: ProfileMediaItem;
-  onSave: (review: ReviewDraft) => void;
-  onClose: () => void;
-}) {
-  const [review, setReview] = useState<ReviewDraft>(() => reviewFromItem(item));
-  const validation = validateReview(review);
-  return (
-    <div
-      className="mt-3 rounded-md border border-[var(--accent-400)]/50 bg-[var(--surface-1)] p-3"
-      data-testid="studio-review-drawer"
-    >
-      <p className="mb-2 text-[11px] font-medium text-[var(--text-muted)]">
-        Editing your review of{" "}
-        <span className="text-[var(--text-strong)]">{item.title}</span>
-      </p>
-      <ReviewEditor
-        item={item}
-        review={review}
-        onChange={setReview}
-        onSave={() => {
-          if (validation.ok) onSave(review);
-        }}
-        onCancel={onClose}
-        authorName="@noir"
-      />
-      {!validation.ok &&
-        (review.title.trim().length > 0 || review.body.trim().length > 0) && (
-          <p className="mt-2 text-[11px] text-[var(--text-faint)]">
-            {validation.message}
-          </p>
-        )}
-    </div>
-  );
-}
+
 
 function isHidden(id: string) {
   // We don't currently maintain collection-level hide flag — visibility is

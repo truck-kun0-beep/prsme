@@ -61,6 +61,10 @@ server.err.txt
 # free-form scratch output written by the phase scripts
 /artifacts/
 
+# one-off shell scratch: a pasted command's output and a file listing
+/env-check.txt
+/tree.txt
+
 # one-off debugging probes kept only while a phase was being chased down;
 # none are wired into package.json, so they are not project code
 /scripts/debug-*.mjs

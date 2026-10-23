@@ -821,6 +821,10 @@ idempotent, so a re-run is safe.
 | `20250101000001_profiles.sql` | The `profiles` table, username constraints, indexes, `updated_at` trigger. |
 | `20250101000002_profiles_rls.sql` | Row Level Security policies + the `is_username_taken()` helper. |
 | `20250101000003_avatars.sql` | The **private** `avatars` bucket and its write policies. |
+| `20250101000004_media_items.sql` | The shared media catalogue (Phase 6). |
+| `20250101000005_media_reviews.sql` | The normalized review table (Phase 6). |
+| `20250101000006_reviews_rls.sql` | RLS for the catalogue and reviews (Phase 6). |
+| `20250101000007_review_backfill.sql` | The `media_review_stats` view + the backfill (Phase 6). |
 
 In the dashboard, set:
 
@@ -975,6 +979,112 @@ sign-in on a second device — needs interactive credentials and is a manual pas
   409), but there is no realtime broadcast.
 
 ---
+
+## Phase 6 — Shared media catalogue and reviews
+
+Phase 5 gave accounts a database. Phase 6 gives *reviews* one: a canonical
+catalogue of works shared by every account, and a normalized `media_reviews`
+table that hangs off it. Before this, a selected item existed only as a fragment
+inside one person's `profile_state` JSON, so two accounts who picked the same
+film each held their own copy and there was nothing for a review to attach to.
+
+### The data model
+
+| Table | One row is | Identity |
+| --- | --- | --- |
+| `media_items` | One *work* (a film, a series, an album, a book) | `(provider, provider_id)` |
+| `media_reviews` | One person's review of one work | `(user_id, media_id)` |
+
+The identity rule is the UNIQUE constraint on `(provider, provider_id)` — never
+the title. "Arrival" the film and "Arrival" the book are different works with
+different provider ids, and PRSME keeps them apart. The same constraint doubles
+as the concurrency guard: when two accounts review the same new film at the same
+moment, one INSERT wins and the loser re-reads the winner's row
+(`lib/supabase/media.ts`) rather than creating a duplicate.
+
+`media_reviews.status` is `draft | published` — an explicit column, never
+implied. `published_at` is stamped by a database trigger, not the client.
+
+### The privacy interlock
+
+A published review does not override its author's privacy setting. The SELECT
+policy calls `public.can_read_review(user_id, status)`, a `SECURITY DEFINER`
+helper that returns only a boolean and checks that the author's profile is
+`public`. So:
+
+- a draft is visible only to its author;
+- a published review is visible to anyone — but only while the author's profile
+  is public;
+- a private profile's reviews are not merely hidden by the application. The
+  database refuses to return the row, so no aggregate, view, or RPC can leak
+  them. `media_review_stats` is `security_invoker`, which means it inherits
+  exactly the rows the caller may read.
+
+### New routes
+
+| Route | Purpose |
+| --- | --- |
+| `/discover` | The review feed: search, category filters, sort, and a "Popular Media" shelf grouped by canonical record. |
+| `/media/[mediaId]` | One work's page — community rating, real review count, and the review writer. |
+| `/review/[reviewId]` | One review in full. |
+| `/about` | What PRSME is. |
+| `/api/media/resolve` | Turn a picked catalogue item into its canonical `media_items` row (server-side, so the uniqueness race is resolved where it can be). |
+| `/api/reviews` | GET / POST / DELETE the caller's own review. Identity comes from the session; no parameter can name the author. |
+
+### Writing a review
+
+Two explicit actions, never one guess:
+
+- **Save draft** — written with `status: 'draft'`, visible to the author alone.
+- **Publish review** — written with `status: 'published'`, visible subject to
+  the author's profile visibility.
+
+A failed write never shows a published state. The confirmation appears only
+after the server has confirmed the write.
+
+### Backwards compatibility
+
+Guests are unaffected. With no session, a review is written into the local
+draft on the collection item exactly as in Phase 4, and the Studio shows a
+single "Save review" button — because the local draft *is* the review's home.
+The two-button writer appears only for a signed-in owner.
+
+### New migrations
+
+| Migration | What it does |
+| --- | --- |
+| `20250101000004_media_items.sql` | The shared catalogue, its identity constraint, and the `updated_at` trigger. |
+| `20250101000005_media_reviews.sql` | The normalized review table, the rating scale, and the publication-state trigger. |
+| `20250101000006_reviews_rls.sql` | RLS for both tables and the `can_read_review()` helper. |
+| `20250101000007_review_backfill.sql` | The `media_review_stats` view and an idempotent backfill of Phase 4's local reviews. |
+
+### Verification
+
+```bash
+npm run test:phase6
+```
+
+`test:phase6` asserts 88 static invariants — the schema, the RLS policies, the
+server boundary, the presentation rules, and the guest/account split — and,
+when a project is configured, exercises the live boundary for both permitted
+and denied paths. The live section is **skipped loudly** without a project
+rather than silently passing.
+
+### Phase 6 limits, stated honestly
+
+- **No people-discovery.** Discover finds works, not people. There is no
+  "recommended reviewers" shelf.
+- **The catalogue is community-shaped.** A work exists once someone reviews
+  it; there is no editorial ingestion of full provider catalogues.
+- **One review per person per work.** Editing updates in place. There are no
+  threaded replies.
+- **No moderation queue.** A published review is public immediately, subject to
+  the author's own profile visibility.
+- **Media artwork stays external.** Catalogue artwork is the provider's own
+  URL, vetted against the allowlist in `lib/media/http.ts`. Nothing is copied
+  into Supabase Storage, and no signed URL is ever persisted.
+
+---
 ---
 
 ## Local development
@@ -1031,13 +1141,20 @@ app/
   forgot-password/ reset-password/
   onboarding/                Create the account's single profile (Phase 5)
   account/                   Email, privacy, sign out (Phase 5)
+  about/                     What PRSME is (Phase 6)
+  discover/                  The review feed + Popular Media shelf (Phase 6)
+  media/[mediaId]/           One work: community rating, real review count (Phase 6)
+  review/[reviewId]/         One review in full (Phase 6)
   auth/callback/route.ts     PKCE / email-confirmation exchange (Phase 5)
   api/profile/route.ts       GET + POST the signed-in owner's profile
   api/profile/avatar/        Avatar upload -> private bucket
   api/profile/avatar-url/    Mints a short-lived signed avatar URL
+  api/reviews/route.ts       GET + POST + DELETE the caller's own review (Phase 6)
+  api/media/resolve/route.ts Provider item -> canonical media_items row (Phase 6)
   globals.css                Design tokens, base styles, reduced-motion handling
 middleware.ts                Session refresh (Phase 5)
-supabase/migrations/         profiles table, RLS policies, avatars bucket (Phase 5)
+supabase/migrations/         profiles, RLS, avatars (Phase 5); media_items,
+                             media_reviews, review RLS, backfill (Phase 6)
 components/
   SiteNav.tsx                Responsive navigation; avatar + account menu when signed in
   SiteFooter.tsx             Multi-column footer
@@ -1051,6 +1168,13 @@ components/
   Button.tsx                 Reusable button primitive (link or button)
   Artwork.tsx                Local SVG-gradient placeholder for media artwork
   Reveal.tsx                 Viewport-triggered reveal wrapper
+  ── Phase 6 ──
+  ProfileReviews.tsx         The public profile's reviews section
+  reviews/ReviewCards.tsx    The shared review card + media tile
+  reviews/ReviewWriter.tsx   The two-action review form (draft / publish)
+  reviews/DiscoverControls.tsx  Search, category filters, sort
+  reviews/MediaReviewPanel.tsx  The media page's review list + writer
+  studio/ReviewDrawer.tsx    The Studio's review drawer (guest + account)
   ── Phase 2 ──
   ProfileHeader.tsx          Profile header (avatar, bio, tags, socials, Share)
   ProfileAvatar.tsx          Round, locally-artworked avatar with prism sigil

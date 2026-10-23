@@ -1,24 +1,44 @@
 "use client";
 
 /**
- * ReviewEditor — Phase 4's personal review form.
+ * ReviewEditor — the personal review form.
  *
  * A review is owner data: a 0–10 rating, an optional headline, a body, and a
  * spoiler flag. It is stored inside the selected media item on the draft, so
  * it shares the item's lifecycle (add → rate → review → remove) without ever
  * being written back to a provider.
  *
+ * Phase 6 — TWO BACKENDS, ONE FORM.
+ *
+ *   - **Guest** (no session): exactly the Phase 4 behaviour. The review is
+ *     written into the local draft on the collection item, and the single
+ *     "Save review" button is correct, because the local draft IS the
+ *     review's home.
+ *
+ *   - **Authenticated**: the same form gains TWO explicit actions — "Save
+ *     draft" and "Publish review". The review is written to the shared
+ *     `media_reviews` table, attached to the canonical media record for the
+ *     item, and the local copy is kept in sync so the collection card still
+ *     renders the rating and the excerpt.
+ *
+ * Why two buttons rather than one: a single save button has to guess whether
+ * the owner meant to publish, and every guess is wrong for somebody. Saving a
+ * half-written review and having it appear in the public feed is the specific
+ * failure the brief rules out.
+ *
  * Validation is explicit and surfaced inline: an empty review is not
  * savable, and the body is capped so a localStorage draft can't bloat.
  */
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
 import { Artwork } from "@/components/Artwork";
 import { RatingBadge } from "@/components/RatingBadge";
 import { FieldGroup, TextArea, TextInput } from "./StudioFields";
 import { PanelCard } from "./StudioFields";
 import type { ProfileMediaItem } from "@/lib/noirProfile";
 import { MEDIA_PROVIDER_LABELS, type MediaProviderId } from "@/lib/media/types";
+import { useAccount } from "@/components/auth/AccountProvider";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
 
 export interface ReviewDraft {
   rating: number | null;
@@ -66,6 +86,15 @@ export function validateReview(review: ReviewDraft): ReviewValidation {
   return { ok: true };
 }
 
+/**
+ * Where the review will end up.
+ *
+ * "draft"     — saved, visible only to the author.
+ * "published" — saved and visible to the public, subject to the author's
+ *               profile visibility.
+ */
+export type ReviewSaveTarget = "draft" | "published";
+
 export function ReviewEditor({
   item,
   review,
@@ -73,25 +102,48 @@ export function ReviewEditor({
   onSave,
   onCancel,
   authorName,
+  busy = false,
+  savedTarget = null,
+  error = null,
 }: {
   item: ProfileMediaItem;
   review: ReviewDraft;
   onChange: (next: ReviewDraft) => void;
-  onSave: () => void;
+  onSave: (target: ReviewSaveTarget) => void | Promise<void>;
   onCancel: () => void;
   /** Display name of the review author inside the demo. */
   authorName: string;
+  /** True while a write is in flight. */
+  busy?: boolean;
+  /** The last successful write's state, for the confirmation line. */
+  savedTarget?: ReviewSaveTarget | null;
+  /** The message from the last failed write. */
+  error?: string | null;
 }) {
+  const { status: accountStatus } = useAccount();
+  const authenticated = isSupabaseConfigured() && accountStatus === "authenticated";
+
   const validation = useMemo(() => validateReview(review), [review]);
   const remaining = REVIEW_BODY_MAX - review.body.length;
   const providerLabel = item.provider
     ? MEDIA_PROVIDER_LABELS[item.provider as MediaProviderId]
     : null;
 
+  const onSaveClick = useCallback(
+    (target: ReviewSaveTarget) => {
+      void onSave(target);
+    },
+    [onSave],
+  );
+
   return (
     <PanelCard
       title={`Review — ${item.title}`}
-      description="Your rating and notes are saved on this device and shown only on your profile."
+      description={
+        authenticated
+          ? "Your rating and notes go to the shared catalogue when you publish them."
+          : "Your rating and notes are saved on this device and shown only on your profile."
+      }
     >
       <div className="flex gap-3">
         <div className="h-24 w-[4.5rem] shrink-0 overflow-hidden rounded-md">
@@ -111,7 +163,10 @@ export function ReviewEditor({
             {[item.byline, item.year, providerLabel].filter(Boolean).join(" · ")}
           </p>
           <p className="mt-2 text-[12px] text-[var(--text-faint)]">
-            By {authorName} · saved in this browser only
+            By {authorName} ·{" "}
+            {authenticated
+              ? "published to the shared catalogue"
+              : "saved in this browser only"}
           </p>
         </div>
       </div>
@@ -194,15 +249,67 @@ export function ReviewEditor({
         </p>
       )}
 
-      <div className="mt-4 flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          onClick={onSave}
-          disabled={!validation.ok}
-          className="inline-flex items-center gap-1.5 rounded-md bg-[var(--accent-400)] px-3.5 py-2 text-[12px] font-medium text-[var(--surface-0)] transition-colors hover:bg-[var(--accent-500)] disabled:opacity-50"
+      {error ? (
+        <p
+          className="mt-3 rounded-md border border-[color:#D6757B]/40 bg-[color:#D6757B]/10 px-3 py-2 text-[12px] text-[color:#E8A0A4]"
+          role="alert"
+          data-testid="studio-review-error"
         >
-          Save review
-        </button>
+          {error}
+        </p>
+      ) : null}
+
+      {savedTarget ? (
+        <p
+          className="mt-3 rounded-md border border-[var(--line-soft)] bg-[var(--surface-1)] px-3 py-2 text-[12px] text-[var(--text-default)]"
+          role="status"
+          data-testid="studio-review-status"
+        >
+          {savedTarget === "published"
+            ? "Published. Your review is live on your profile and on the media page."
+            : "Draft saved. Only you can see it — publish it when you're ready."}
+        </p>
+      ) : null}
+
+      {/*
+       * Two explicit actions for an authenticated owner; one for a guest.
+       *
+       * For a guest the local draft IS the review's home, so there is nothing
+       * to publish and a single "Save review" is the honest control.
+       */}
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        {authenticated ? (
+          <>
+            <button
+              type="button"
+              onClick={() => onSaveClick("draft")}
+              disabled={busy || !validation.ok}
+              className="inline-flex items-center gap-1.5 rounded-md border border-[var(--line-strong)] bg-[var(--surface-2)] px-3.5 py-2 text-[12px] font-medium text-[var(--text-default)] transition-colors hover:bg-[var(--surface-3)] disabled:opacity-50"
+              data-testid="studio-review-save-draft"
+            >
+              {busy ? "Saving…" : "Save draft"}
+            </button>
+            <button
+              type="button"
+              onClick={() => onSaveClick("published")}
+              disabled={busy || !validation.ok}
+              className="inline-flex items-center gap-1.5 rounded-md bg-[var(--accent-400)] px-3.5 py-2 text-[12px] font-medium text-[var(--surface-0)] transition-colors hover:bg-[var(--accent-500)] disabled:opacity-50"
+              data-testid="studio-review-publish"
+            >
+              {busy ? "Publishing…" : "Publish review"}
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            onClick={() => onSaveClick("draft")}
+            disabled={busy || !validation.ok}
+            className="inline-flex items-center gap-1.5 rounded-md bg-[var(--accent-400)] px-3.5 py-2 text-[12px] font-medium text-[var(--surface-0)] transition-colors hover:bg-[var(--accent-500)] disabled:opacity-50"
+            data-testid="studio-review-save"
+          >
+            {busy ? "Saving…" : "Save review"}
+          </button>
+        )}
         <button
           type="button"
           onClick={onCancel}

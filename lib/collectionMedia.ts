@@ -71,6 +71,16 @@ export function recordToItem(
     palette: "iris",
     provider: record.provider,
     providerId: record.providerId,
+    /*
+     * Phase 6 — the picker's kind is preserved separately.
+     *
+     * `kind` collapses song and album into "music" for the card layout, but
+     * the shared catalogue keeps them apart. Storing the original here means
+     * the Studio can resolve this item to the right canonical media record
+     * without guessing.
+     */
+    catalogKind: record.kind,
+    creatorRole: record.creatorRole,
     coverUrl: record.coverUrl ?? undefined,
     coverSource: record.coverSource,
     externalUrl: record.externalUrl,

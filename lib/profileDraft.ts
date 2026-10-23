@@ -137,6 +137,7 @@ export type ProfileVisibility = "public" | "followers" | "private";
 export type SectionId =
   | "soundtrack"
   | "collections"
+  | "reviews"
   | "links"
   | "activity"
   | "clicks";
@@ -144,6 +145,7 @@ export type SectionId =
 export const SECTION_LABELS: Record<SectionId, string> = {
   soundtrack: "Profile soundtrack",
   collections: "Curated shelves",
+  reviews: "Reviews",
   links: "Custom links",
   activity: "Recent activity",
   clicks: "My Clicks",
@@ -303,6 +305,13 @@ export function buildDefaultDraft(
        * sees no gap, and one who does sees it without hunting for a toggle.
        */
       links: true,
+      /*
+       * Phase 6 — `reviews` defaults to visible. Like `links`, the section
+       * renders nothing at all when the owner has no published reviews, so
+       * defaulting it to visible costs no space and means an owner who
+       * publishes their first review sees it without hunting for a toggle.
+       */
+      reviews: true,
       activity: true,
       clicks: true,
     },
@@ -623,6 +632,25 @@ const COLLECTION_LAYOUT_IDS: CollectionLayoutId[] = [
   "review-journal",
   "album-gallery",
 ];
+
+/**
+ * Phase 6 — the catalogue kinds a stored profile item may carry.
+ *
+ * These mirror `MediaKindId` in `lib/media/types.ts`. The list lives here as
+ * its own constant so the draft validator does not need to import from the
+ * media layer, and so an unknown value in stored JSON is dropped rather than
+ * passed through to the catalogue resolver.
+ */
+const CATALOG_KINDS = [
+  "movie",
+  "tv",
+  "song",
+  "album",
+  "manga",
+  "book",
+] as const;
+
+type CatalogKind = (typeof CATALOG_KINDS)[number];
 /*
  * Phase 4.6 — kept as an alias of `DEFAULT_SECTION_ORDER` rather than a second
  * hand-written list. Two lists would drift, and the repair below depends on
@@ -758,6 +786,8 @@ export function readDraft(input: unknown): ProfileDraft {
           : fallback.sectionVisibility.collections,
       activity:
         typeof vis.activity === "boolean" ? vis.activity : fallback.sectionVisibility.activity,
+      reviews:
+        typeof vis.reviews === "boolean" ? vis.reviews : fallback.sectionVisibility.reviews,
       links:
         typeof vis.links === "boolean" ? vis.links : fallback.sectionVisibility.links,
       clicks:
@@ -904,6 +934,11 @@ function readProfileMediaItem(item: Record<string, unknown>): ProfileCollection[
     palette,
     provider: typeof item.provider === "string" ? clampString(item.provider, 60) : undefined,
     providerId: typeof item.providerId === "string" ? clampString(item.providerId, 120) : undefined,
+    catalogKind: CATALOG_KINDS.includes(item.catalogKind as CatalogKind)
+      ? (item.catalogKind as CatalogKind)
+      : undefined,
+    creatorRole:
+      typeof item.creatorRole === "string" ? clampString(item.creatorRole, 80) : undefined,
     coverUrl: typeof item.coverUrl === "string" ? clampString(item.coverUrl, 600) : undefined,
     coverSource: typeof item.coverSource === "string" ? clampString(item.coverSource, 80) : undefined,
     externalUrl: typeof item.externalUrl === "string" ? clampString(item.externalUrl, 600) : undefined,

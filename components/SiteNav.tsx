@@ -2,31 +2,49 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Wordmark } from "./Wordmark";
 import { Button } from "./Button";
 import { useAccount } from "./auth/AccountProvider";
 import { AccountMenu } from "./auth/AccountMenu";
 
-const navLinks = [
-  { href: "#discover", label: "Discover" },
-  { href: "#themes", label: "Themes" },
-  { href: "#taste", label: "Taste" },
-  { href: "#share", label: "Share" },
-];
-
 /**
- * Profile-top navigation.
+ * The primary navigation.
  *
- * Renders the same mobile-first behaviour everywhere, but resolves colours
- * from the profile-scoped `--pf-*` tokens when it sits inside
- * `.profile-scope` and from the site tokens on the rest of the app. That
- * way a Midnight Blue theme visibly recolours the nav inside the iframe,
- * while the marketing nav on the landing page keeps its own look.
+ * Phase 6 — three entries, and each one goes somewhere real:
+ *
+ *   - **Discover Reviews** → `/discover`. The real review-discovery page.
+ *   - **Themes** → the landing page's themes section. The link is
+ *     route-aware: on the landing page it is the in-page anchor `#themes`,
+ *     and from any other route it is `/#themes`, so clicking Themes from
+ *     `/discover` still lands on the themes section rather than doing nothing.
+ *   - **About** → `/about`.
+ *
+ * "Taste" and "Share" were removed from the primary navigation. Sharing
+ * remains an action on an individual profile (the Share button in the profile
+ * header), and "Taste" was not a clear destination name for what is now the
+ * Discover Reviews page.
  */
 export function SiteNav() {
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement | null>(null);
   const { status } = useAccount();
+  const pathname = usePathname();
+
+  /*
+   * The themes link is `#themes` on the landing page and `/#themes` from
+   * anywhere else. A bare `#themes` on another route would look for a
+   * fragment on that route's own page — where no such fragment exists — and
+   * the click would appear to do nothing.
+   */
+  const onLandingPage = pathname === "/";
+  const themesHref = onLandingPage ? "#themes" : "/#themes";
+
+  const navLinks = [
+    { href: "/discover", label: "Discover Reviews" },
+    { href: themesHref, label: "Themes" },
+    { href: "/about", label: "About" },
+  ];
 
   /*
    * Phase 5 — a signed-in visitor gets an avatar, not two buttons.
@@ -86,12 +104,18 @@ export function SiteNav() {
         </ul>
 
         <div className="hidden items-center gap-2 md:flex">
-          <Button href="#signup" variant="ghost" size="sm">
-            Sign in
-          </Button>
-          <Button href="#signup" size="sm">
-            Create profile
-          </Button>
+          {isAuthenticated ? (
+            <AccountMenu />
+          ) : (
+            <>
+              <Button href="/sign-in" variant="ghost" size="sm">
+                Sign in
+              </Button>
+              <Button href="/sign-up" size="sm">
+                Create profile
+              </Button>
+            </>
+          )}
         </div>
 
         <button

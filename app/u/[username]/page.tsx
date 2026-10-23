@@ -13,6 +13,7 @@ import { PublicProfileOverride } from "@/components/PublicProfileOverride";
 import { ThemeScope } from "@/components/ThemeScope";
 import { isKnownProfile, noirProfile } from "@/lib/noirProfile";
 import { getProfileByUsername } from "@/lib/supabase/profiles";
+import { listPublishedReviews } from "@/lib/supabase/reviews";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { DatabaseProfile } from "@/components/auth/DatabaseProfile";
 
@@ -125,6 +126,16 @@ export default async function PublicProfilePage({
     const record = await getProfileByUsername(key);
     if (!record?.draft) notFound();
 
+    /*
+     * The owner's published reviews, from the shared `media_reviews` table.
+     *
+     * These are the SAME records that appear on each media page and in the
+     * Discover feed. The RLS policy filters out any review whose author is
+     * not publicly visible — and since the visitor can only be here for a
+     * public profile, that is consistent with what they are allowed to see.
+     */
+    const reviews = await listPublishedReviews({ authorId: record.userId });
+
     return (
       <>
         <SiteNav />
@@ -134,7 +145,7 @@ export default async function PublicProfilePage({
            * the same typed draft — so a saved public profile cannot drift from
            * what its owner sees while editing it.
            */}
-          <DatabaseProfile draft={record.draft} />
+          <DatabaseProfile draft={record.draft} reviews={reviews} />
         </main>
         <SiteFooter />
       </>

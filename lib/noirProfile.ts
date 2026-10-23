@@ -147,6 +147,17 @@ export interface ProfileMediaItem {
    * without `provider` are demo items that were hand-authored.
    */
   provider?: string;
+  /**
+   * Phase 6 — the picker kind, preserved separately from `kind`.
+   *
+   * `kind` collapses a song and an album into "music" for the card layout.
+   * The shared catalogue needs the distinction (a media page is for an album
+   * or for a song, not for "music"), so the original picker kind is kept
+   * here and is what gets sent to the catalogue resolver.
+   */
+  catalogKind?: "movie" | "tv" | "song" | "album" | "manga" | "book";
+  /** The provider's role for `creator` ("Director", "Artist", …). */
+  creatorRole?: string;
   providerId?: string;
   /** Provider-attributed artwork URL, if any. */
   coverUrl?: string;

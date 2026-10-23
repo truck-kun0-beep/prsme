@@ -5,6 +5,7 @@ import { ThemeScope } from "@/components/ThemeScope";
 import { buildEffectiveOwner } from "@/lib/effectiveProfile";
 import { noirProfile } from "@/lib/noirProfile";
 import type { ProfileDraft } from "@/lib/profileDraft";
+import type { Review } from "@/lib/supabase/reviews";
 
 /**
  * Renders a profile whose customization lives in the database.
@@ -20,8 +21,16 @@ import type { ProfileDraft } from "@/lib/profileDraft";
  */
 export function DatabaseProfile({
   draft,
+  reviews = [],
 }: {
   draft: ProfileDraft;
+  /**
+   * Phase 6 — the owner's published reviews, read from the shared database.
+   *
+   * Passed straight through to `PublicProfileContent`, which renders nothing
+   * for this section when the array is empty.
+   */
+  reviews?: Review[];
 }) {
   const owner = buildEffectiveOwner(noirProfile, draft);
 
@@ -31,6 +40,7 @@ export function DatabaseProfile({
         owner={owner}
         draft={draft}
         respectSectionVisibility
+        reviews={reviews}
       />
     </ThemeScope>
   );

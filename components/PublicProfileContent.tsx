@@ -26,6 +26,8 @@ import { CollectionBlock } from "@/components/CollectionCards";
 import { ActivityList } from "@/components/ActivityList";
 import { MyClicksGallery } from "@/components/MyClicksGallery";
 import { ProfileCustomLinks, CustomLinksSectionHeader } from "@/components/ProfileCustomLinks";
+import { ProfileReviews } from "@/components/ProfileReviews";
+import type { Review } from "@/lib/supabase/reviews";
 import type { ProfileOwner, ProfileCollection } from "@/lib/noirProfile";
 import { noirProfile } from "@/lib/noirProfile";
 import {
@@ -46,12 +48,24 @@ interface PublicProfileContentProps {
   draft?: ProfileDraft | null;
   /** When true, only the visible sections are rendered (no hidden gaps). */
   respectSectionVisibility?: boolean;
+  /**
+   * Phase 6 — the owner's published reviews, read from the shared
+   * `media_reviews` table.
+   *
+   * Optional, because two surfaces render this component and only one of
+   * them has database-backed reviews: the demo `/u/noir` and the Studio
+   * preview render it from local data, while a registered profile renders it
+   * from the database. When the array is absent or empty, the reviews section
+   * renders NOTHING — no heading, no empty state, no gap in the page.
+   */
+  reviews?: Review[];
 }
 
 export function PublicProfileContent({
   owner,
   draft = null,
   respectSectionVisibility = true,
+  reviews = [],
 }: PublicProfileContentProps) {
   const visibleSections: Set<SectionId> =
     respectSectionVisibility && draft
@@ -207,6 +221,22 @@ export function PublicProfileContent({
            * border, and — critically — no `.pf-section` padding leaving a blank
            * gap where the buttons would have been.
            */
+          if (id === "reviews") {
+            /*
+             * The reviews section is driven by the DATABASE, not by the
+             * section-order list — but it still honours the owner's choice
+             * about whether to show it.
+             *
+             * `ProfileReviews` returns `null` when there is nothing to show,
+             * so an owner with no published reviews gets no heading and no
+             * gap — just the profile they had.
+             */
+            if (respectSectionVisibility && draft && !draft.sectionVisibility.reviews) {
+              return null;
+            }
+            return <ProfileReviews key="reviews" reviews={reviews} />;
+          }
+
           if (id === "links") {
             const links = owner.customLinks;
             if (!links || links.length === 0) return null;

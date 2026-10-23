@@ -26,6 +26,8 @@
     "test:phase46:soundtrack": "node scripts/phase46-soundtrack.mjs",
     "test:phase47": "node scripts/phase47-verify.mjs",
     "test:phase5": "node scripts/phase5-verify.mjs",
+    "test:phase6": "node scripts/phase6-verify.mjs",
+    "probe:phase6": "node scripts/phase6-env-probe.cjs",
     "test:phase41": "node scripts/phase41-api-check.mjs",
     "test:phase41:browser": "node scripts/phase41-browser-checks.mjs",
     "capture:phase4": "node scripts/capture-phase4.mjs",
