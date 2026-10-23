@@ -17,7 +17,17 @@ The repository currently ships:
 
 - **Phase 4.2** — collection layout redesign, artwork reliability, ratings and reviews. Featured rebuilt with two real columns and no overlap, Compact is a four-column grid with a rating column on every row, Poster Grid is unchanged but its sized artwork now renders, and Music collections gain a new Soundtrack-List layout resembling repeated compact soundtrack cards. Cinemeta's poster CDN stopped serving images, so films hydrate their posters from Wikipedia's REST summary endpoint through an identity-and-kind gate that rejects unrelated or redirect-targeted pages. Personal ratings render on opaque theme-aware surfaces in every layout, "Read full review" is gone — clicking the excerpt itself opens the full review at `/u/[username]/review/[itemId]` — and Books support a Light Novel subtype.
 
-Authentication, server-side privacy enforcement, and shared server-side persistence arrive in later phases.
+- **Phase 4.3** — My Clicks as a real personal photography shelf: two honest sourcing modes (a direct HTTPS image URL, or a public Instagram/Facebook post URL), a desktop editorial mosaic and a mobile snap rail, honest failed-image fallback, and no source-URL metadata on the card.
+
+- **Phase 4.4** — Album Gallery and Review Journal layouts, plus Apple Music artwork across every theme.
+
+- **Phase 4.5** — Custom Link Buttons, section ordering, and the Apple Music glyph repair.
+
+- **Phase 4.6** — Custom Link Button redesign and Soundtrack List layout repair. Custom Link Buttons become a **prominent, independent profile section** positioned after every media collection and before Recent activity, with My Clicks last; they are rendered as substantial link-in-bio buttons (52 px minimum, 56 px on desktop, 34 rem max width) with four working presentation options — shape, fill style, colour mode, and layout. The Soundtrack List hover overflow is fixed at its actual cause. See [Phase 4.6](#phase-46--custom-link-buttons-and-the-soundtrack-list) for the full account, including the measured root cause.
+
+OAuth providers, a followers tier, and in-app account deletion are still to come.
+
+- **Phase 4.7** — the Custom Links section's eyebrow, heading, and description become editable profile data, and the Soundtrack List's artist line stops silently discarding text on narrow screens. See [Phase 4.7](#phase-47--editable-custom-links-copy-and-the-soundtrack-list).
 
 ---
 
@@ -26,10 +36,21 @@ Authentication, server-side privacy enforcement, and shared server-side persiste
 | Route | What it shows |
 | --- | --- |
 | `/` | Marketing landing page (Phase 1). |
-| `/u/noir` | Public demo profile for Noir Aldridge (Phase 2; Phase 3 client-side override when a customization draft is saved). |
+| `/u/noir` | Public demo profile for Noir Aldridge (Phase 2; Phase 3 client-side override when a guest customization draft is saved). Always available, with or without a database. |
+| `/u/[username]` | A registered account's public profile (Phase 5). Private profiles 404 for everyone but their owner. |
 | `/u/anything-else` | Meaningful not-found state. |
-| `/studio` | Local-only Customization Studio for the demo profile (Phase 3, `noindex`). |
+| `/studio` | Customization Studio. A **guest** Studio saving to `localStorage` (Phase 3) or an **account** Studio saving to Supabase (Phase 5). `noindex`. |
+| `/sign-in` | Email + password sign-in (Phase 5). |
+| `/sign-up` | Account creation (Phase 5). |
+| `/forgot-password` | Request a reset link (Phase 5). |
+| `/reset-password` | Choose a new password (Phase 5). |
+| `/auth/callback` | PKCE / email-confirmation exchange (Phase 5). |
+| `/onboarding` | Create the account's single profile (Phase 5). Redirects to `/studio` if one already exists. |
+| `/account` | Email, username, privacy, password reset, sign out (Phase 5). |
 | Any unknown path | Phase 1 404 page. |
+
+Every route above works with **no** Supabase project configured; the account
+routes render setup instructions instead of a form.
 
 ---
 
@@ -78,11 +99,16 @@ The component still behaves honestly if a future owner supplies a malformed URL 
 
 Architecture already reflects these next-phase requirements; no auth/DB was built:
 
-- **One profile per authenticated account.** The eventual database must enforce this with a unique constraint (e.g. unique `owner_id` on a `profiles` table). Frontend buttons cannot guarantee uniqueness.
+- **One profile per authenticated account.** A `UNIQUE` constraint on
+  `profiles.user_id` — a database rule, not a frontend button.
+  See [Phase 5](#phase-5--real-accounts-supabase-and-persistent-profiles).
 - **"Create profile" is onboarding for an account's single profile.**
-- After authentication ships, the global navigation will place the authenticated user's avatar at the far right with an accessible menu.
-- The **public profile avatar** and the **account-navigation avatar** serve different purposes — they are not duplicated unnecessarily inside the global navigation.
-- The signed-in owner will later be able to edit their bio, tags, links, soundtrack, and presentation from a profile studio.
+  `/onboarding` runs only after a valid session, and forwards to `/studio` when a
+  profile already exists.
+- After authentication ships, the global navigation will place the authenticated user's avatar at the far right with an accessible menu. **Done** —
+  `components/auth/AccountMenu.tsx`, one avatar at every width.
+- The **public profile avatar** and the **account-navigation avatar** serve different purposes — they are not duplicated unnecessarily inside the global navigation. **Done** — the mobile panel links to account settings instead of repeating the avatar.
+- The signed-in owner will later be able to edit their bio, tags, links, soundtrack, and presentation from a profile studio. **Done** — the existing Studio becomes account-backed.
 
 ### Phase 2.1 — Integration limits
 
@@ -105,15 +131,18 @@ The hard product rule: `/u/noir` and `/studio` must never drift. They are compos
 | **Identity** | Display name, biography, location, pronouns, interest tags (Enter to add), avatar upload (PNG/JPEG/WebP, 8 MB cap → resized to 320 px JPEG @ 0.86, ≤ 240 KB data URL), palette picker. |
 | **Socials** | Editable Facebook / Instagram / Snapchat / LinkedIn URLs with platform-specific host validation. |
 | **Collections** | Rename, describe, change layout (`poster-grid` / `featured` / `compact`), set visibility, reorder, add/remove, per-collection "Show on public profile" toggle. |
-| **Sections** | Show/hide and reorder the four public sections (Soundtrack, Collections, Recent Activity, My Clicks). |
+| **Sections** | Show/hide and reorder the five public sections (Soundtrack, Collections, Custom links, Recent Activity, My Clicks). |
+| **Custom Links** | Add, edit, reorder, and remove outbound link buttons (label + `https://` destination, both validated). Per-button appearance: shape (`rounded` / `rect` / `pill`), fill style (`solid` / `outline` / `tint`), colour mode (theme accent, or a custom hex whose readable text colour is derived automatically), and layout (`stack` / `grid`). **Custom Links Section Appearance** (Phase 4.7): the eyebrow, heading, and description that introduce the section, each independently editable and each omitted from the profile when left blank. A live preview renders the real public component in the saved theme. |
 | **Soundtrack** | Toggle the soundtrack section; edit title, artist, and Spotify URL with `host + path` validation (`/track\|/album\|/playlist\|/artist\|/episode\|/show`). "Restore demo" re-seeds the verified real track. |
-| **Privacy** | Public / Followers-only / Private with the explicit caveat that this is a local preview only — server-side enforcement arrives with the authenticated backend. |
+| **Privacy** | Public / Followers-only / Private. For a guest this is a local preview; **signed in (Phase 5), it is enforced by a database policy** — see `/account` for the real setting. |
 
 ### How the studio saves
 
-The studio writes a versioned, runtime-validated `ProfileDraft` to `localStorage` under the key `prsme:profile-draft:v1` (version `1`). Localstorage is the *only* persistence — there is no fetch, no cookie, no service worker, no IndexedDB. Reads go through `readDraft()` which drops malformed entries (wrong version, wrong shape, oversize strings) and falls back to `buildDefaultDraft()` so a corrupted entry cannot crash the page.
+**As a guest**, the studio writes a versioned, runtime-validated `ProfileDraft` to `localStorage` under the key `prsme:profile-draft:v1` (version `1`). Reads go through `readDraft()` which drops malformed entries (wrong version, wrong shape, oversize strings) and falls back to `buildDefaultDraft()` so a corrupted entry cannot crash the page.
 
-Cross-tab sync via the `storage` event: edits in one tab reflect in the studio in another, and the public profile updates live.
+**Signed in (Phase 5)**, the same draft is read from and written to Supabase instead — see [Phase 5](#phase-5--real-accounts-supabase-and-persistent-profiles). `localStorage` is not consulted for a signed-in owner.
+
+Cross-tab sync via the `storage` event: edits in one tab reflect in the studio in another, and the public profile updates live. (Guest mode only — Phase 5 notes why.)
 
 ### How the public profile reflects the studio
 
@@ -129,7 +158,7 @@ The five themes are real CSS-variable presets applied via `[data-theme="<id>"]` 
 
 ### SSR strategy
 
-`/studio` is fully client-side (its hooks depend on localStorage hydration) and is rendered with `export const dynamic = "force-dynamic"`. The SSR HTML is a minimal boot shell — `customized studio heading` and a "Loading studio…" placeholder — that hydrates into the full studio on mount. All six panels are mounted in DOM at all times (inactive panels use `hidden`), so SSR markup contains every panel's testid, social editor, and palette picker.
+`/studio` is fully client-side (its hooks depend on a localStorage **or database** hydration) and is rendered with `export const dynamic = "force-dynamic"`. The SSR HTML is a minimal boot shell — `customized studio heading` and a "Loading studio…" placeholder — that hydrates into the full studio on mount. All six panels are mounted in DOM at all times (inactive panels use `hidden`), so SSR markup contains every panel's testid, social editor, and palette picker.
 
 ### Limits, stated honestly
 
@@ -149,7 +178,15 @@ The five themes are real CSS-variable presets applied via `[data-theme="<id>"]` 
 | `scripts/phase24-regression.mjs` | Server-rendered HTML sweep — header, soundtrack, location, pronouns, collections, activity, My Clicks, route codes. | **22/22** passing |
 | `scripts/phase25-test.mjs` | Track image / logo anchor / no-fake-controls invariants across 7 widths. | **133/133** passing |
 | `scripts/phase31-suite.mjs` | Phase 3.1 §14 — themes / typography / layout / collections / Spotify / tags / persistence / overflow 360→1440. | **29/29** passing |
-| `scripts/phase4-suite.mjs` | Phase 4 §14 — live provider search per kind, add-to-collection, dedupe, artwork, review write + full-review read, overflow 360→1440, no open proxy, no secrets, no artwork binaries, soundtrack cover swap. | **21/21** passing |
+| `scripts/phase4-suite.mjs` | Phase 4 §14 — live provider search per kind, add-to-collection, dedupe, artwork, review write + full-review read, overflow 360→1440, no open proxy, no secrets, no artwork binaries, soundtrack cover swap. | **22/22** passing |
+| `scripts/phase43-suite.mjs` | My Clicks sourcing modes, mosaic + rail, failed-image fallback, no source metadata, overflow sweep. | **69/69** passing |
+| `scripts/phase44-verify.mjs` | Album gallery + review journal layouts, Apple Music artwork and glyph per theme, no overflow. | **19/19** passing |
+| `scripts/phase45-qa.mjs` | Phase 4.5 Custom Links, section order, My Clicks redesign, typography and theme coherence. | **48/48** passing |
+| `scripts/phase45-studio-links.mjs` | Drives the real `/studio` Custom Links panel: validation, add, reorder, edit, remove, save, `/u/noir` persistence, empty-state, reset. | **18/18** passing |
+| `scripts/phase45-theme-audio.mjs` | Custom button background / border / font change per theme and typography; Apple Music glyph uncut in all four themes. | **31/31** passing |
+| `scripts/phase46-qa.mjs` | Phase 4.6 Custom Links — real document order, geometry at 360/390/430/768/832/1024/1280/1440, each appearance option measured in the rendered DOM, theme + typography coherence, a real studio save → public profile → full reload, and the empty/invalid states. | **135/135** passing |
+| `scripts/phase46-soundtrack.mjs` | Soundtrack List hover stability — every row's rect, margin, padding, transform, and thumbnail box compared before / during / after a real CDP mouse hover at 390 and 1280, plus keyboard focus, external navigation, and list + document overflow. | **72/72** passing |
+| `scripts/phase47-verify.mjs` | Phase 4.7 — the three Custom Links copy fields edited through the real studio panel, saved, reloaded, and read back on `/u/noir`; blank-field, pre-4.7-draft, and malformed-draft repair; Reset demo. Plus Soundtrack List row/artwork/metadata/rating boxes measured inside the collection content box at 360 / 390 / 430, long titles and album names, hover stability, and row-as-link behaviour. | **94/94** passing |
 | `scripts/verify-single-render.mjs` | Exactly one visible copy of every region on `/u/noir` (no duplicate UI). | ✓ |
 | `scripts/capture-phase4.mjs` | Screenshot evidence for Phase 4 (search results per kind, selected item, review editor, full review, mobile). | 14 PNGs |
 
@@ -742,6 +779,204 @@ the Interstellar review page.
 
 ---
 
+## Phase 5 — Real accounts, Supabase, and persistent profiles
+
+Phase 5 connects PRSME to Supabase. A visitor can now create an account, own
+**exactly one** profile, customize it, and reach that profile from another
+device.
+
+### The rule that shapes everything else
+
+**A profile only ever follows a valid authenticated session.** It is never
+created from a signup form, never created optimistically, and never created
+before the email is confirmed. A row in `profiles` therefore always has a real
+`auth.users` owner behind it — there are no orphaned profiles from abandoned
+signups, and no profile that outlives the account that owns it.
+
+### Setup
+
+```bash
+cp .env.example .env.local
+```
+
+Fill in the two variables in `.env.local`:
+
+```
+NEXT_PUBLIC_SUPABASE_URL=https://<your-project-ref>.supabase.co
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=<your-publishable-key>
+```
+
+Then apply the schema, in filename order:
+
+```bash
+npx supabase link --project-ref <your-project-ref>
+npx supabase db push
+```
+
+Or paste each file in `supabase/migrations/` into the SQL editor. They are
+idempotent, so a re-run is safe.
+
+| Migration | What it does |
+| --- | --- |
+| `20250101000001_profiles.sql` | The `profiles` table, username constraints, indexes, `updated_at` trigger. |
+| `20250101000002_profiles_rls.sql` | Row Level Security policies + the `is_username_taken()` helper. |
+| `20250101000003_avatars.sql` | The **private** `avatars` bucket and its write policies. |
+
+In the dashboard, set:
+
+- **Authentication → URL Configuration → Site URL** → `http://localhost:3000`
+- **Authentication → URL Configuration → Redirect URLs** → add
+  `http://localhost:3000/auth/callback` and `http://localhost:3000/**`
+- **Authentication → Providers → Email** → leave "Confirm email" on for real
+  signups. The sign-up form handles both cases: it branches on whether a
+  session was returned, so it is correct whether or not confirmation is on.
+
+### Nothing breaks without a project
+
+This is the hard constraint of the phase, and it is enforced structurally rather
+than by convention: `readSupabaseEnv()` returns `null` when the variables are
+absent, no client is ever constructed at module scope, and `AuthShell` renders
+setup instructions instead of a form when configuration is missing. So there is
+no code path where an auth page can throw on an unconfigured build.
+
+Concretely, with no `.env.local`:
+
+- `/u/noir` — the fictional demo, unchanged, still server-rendered.
+- `/studio` — a **guest** Studio, saving to `localStorage` exactly as in Phase 3.
+- `/sign-in`, `/sign-up`, … — a "accounts aren't set up" panel with instructions
+  and a link back to the demo.
+
+### Security model
+
+**Privacy is enforced at the database and server, not hidden in the browser.**
+The RLS policies in `20250101000002_profiles_rls.sql` are the actual gate;
+`lib/supabase/profiles.ts` is a typed convenience layer above them.
+
+| Operation | Who | Enforced by |
+| --- | --- | --- |
+| Read a public profile | Anyone, including anonymous | `using (visibility = 'public')` |
+| Read a private profile | Only its owner | `using (auth.uid() = user_id)` |
+| Create a profile | Only your own | `with check (auth.uid() = user_id)` |
+| Update a profile | Only your own, `user_id` immutable | `using` **and** `with check` |
+| Delete a profile | Only your own | `using (auth.uid() = user_id)` |
+
+Specific properties worth naming:
+
+- **One profile per account is a `UNIQUE` constraint**, not an application
+  check. Two simultaneous onboarding requests are resolved by Postgres: one wins,
+  the other gets `23505`. A `SELECT`-then-`INSERT` check would let both pass.
+- **Server-controlled fields are columns, not JSON.** `user_id`, `username`, and
+  `visibility` live in real columns, so a crafted `profile_state` payload cannot
+  change ownership or publish a private profile. `StoredProfileState` excludes
+  them from the type, so writing them from application code is a compile error.
+- **Not-found and forbidden are the same answer.** A visitor asking for someone
+  else's private profile gets exactly what they get for a nonexistent one, so
+  the URL cannot be used to discover who holds an account.
+- **Usernames are case-insensitively unique** via a unique index on
+  `lower(username)`. A plain `unique(username)` would happily store both `Mara`
+  and `mara`. `noir` is reserved by a CHECK constraint so the demo stays
+  reachable on every deployment.
+- **Availability checks reveal nothing.** `is_username_taken()` is
+  `SECURITY DEFINER` (a private profile would otherwise look available) and
+  returns a bare boolean — "taken", never "held by whom".
+- **Session identity comes from `getClaims()`, never `getSession()`.**
+  `getSession()` reads the cookie without revalidating it, so a forged cookie
+  would be trusted as this user. `getClaims()` verifies the signature.
+- **Redirect targets are allowlisted.** `/auth/callback?next=…` accepts only
+  same-origin paths; `//evil.example` and `/\evil.example` are rejected, so a
+  freshly-issued session is never handed to another origin.
+
+### Avatars
+
+The `avatars` bucket is **private** — not every avatar is in a publicly readable
+bucket. Nothing is persisted as a URL:
+
+- Objects live at `<auth.uid()>/avatar-<random>.<ext>`, so the write policy is a
+  single folder-name comparison and an owner cannot overwrite another's avatar
+  by guessing a path.
+- `profiles.avatar_path` stores the **path only**. A signed URL would both expire
+  and be a bearer-style credential sitting in a database row.
+- Bytes leave the bucket solely through `/api/profile/avatar-url`, which mints a
+  5-minute signed URL **after** checking the caller may see that profile, and
+  serves it `no-store, vary: Cookie` so a shared proxy cannot cache one visitor's
+  URL for another.
+- There is deliberately **no storage `SELECT` policy**. A policy would hand the
+  bytes to any authenticated user who could guess the path, defeating the private
+  bucket while leaving the object invisible in listings.
+
+### Data model
+
+`profiles.profile_state` holds the Studio's customization as **one versioned
+JSONB document**, not as normalized tables. That is a deliberate scope decision:
+the entire application is local-storage only, so there was no pre-existing
+normalized structure for reviews or ratings to preserve or duplicate, and
+versioning the document is what makes a future shape change migratable rather
+than lossy.
+
+`profile_state.version` is checked on both directions. Bumping it requires
+adding a migration pass to `lib/supabase/profileState.ts`; an unknown version
+degrades to a clean starter profile rather than guessing at the shape.
+
+### Guest vs. account in the Studio
+
+`components/studio/ProfileStoreProvider.tsx` owns the draft and picks the backend:
+
+| State | Source | Saves to |
+| --- | --- | --- |
+| No session / no project | `localStorage` | `localStorage` |
+| Signed in | Database | `POST /api/profile` |
+
+Three rules that matter:
+
+- **A signed-in owner never loads the guest `localStorage` draft.** A guest may
+  legitimately carry work from before they had an account, but once they do, the
+  database is authoritative. Silently merging the two would let a stale device
+  overwrite a saved profile.
+- **The guest draft is *offered*, never auto-applied.** Onboarding presents an
+  explicit opt-in ("use the profile I already customized as a guest"). When it is
+  declined, the new profile starts **empty** — never from Noir's demo, which
+  would put a fictional person's name and bio on a stranger's profile.
+- **Saves are ordered.** Each save takes a monotonic ticket; a response for a
+  superseded revision cannot publish its result. The "Saved" flash waits for the
+  database to confirm rather than claiming success optimistically.
+
+Signing out clears the guest draft from the device — otherwise the next person to
+use a shared browser opens the Studio and finds the previous owner's work.
+
+### Verification
+
+```bash
+npm run test:phase5                       # policy + boundary invariants
+node scripts/phase5-smoke.mjs <baseUrl>   # every route, no project needed
+```
+
+`test:phase5` asserts 31 static invariants — the RLS policies, the private
+bucket, the redirect allowlist, the guest fallbacks — and, when a project is
+configured, exercises the live RLS boundary anonymously (anon insert refused,
+anon select filtered to public rows, anon storage upload refused). The live
+section is **skipped loudly** without a project rather than silently passing.
+
+Covering the full journey — registration → confirmation → onboarding → save →
+sign-in on a second device — needs interactive credentials and is a manual pass.
+
+### Phase 5 limits, stated honestly
+
+- **No OAuth.** Email + password only.
+- **No email-change flow.** The account page shows the address and points at the
+  dashboard.
+- **No follower tier.** `visibility` is `public | private`; a followers level
+  needs the follower feature to mean anything.
+- **No account deletion in-app.** The DELETE policy exists so a future in-app
+  delete is not blocked by RLS; account removal itself is a dashboard action.
+- **Media artwork stays external.** Posters, book covers, and My Clicks images
+  remain URLs to third-party CDNs. Only avatars are stored.
+- **Cross-tab live sync is localStorage-only.** A signed-in owner editing in two
+  tabs is protected by the `updated_at` conflict check (the second save gets a
+  409), but there is no realtime broadcast.
+
+---
+---
+
 ## Local development
 
 ### Prerequisites
@@ -788,13 +1023,23 @@ Visit `/`, `/u/noir`, `/u/noname`, and `/some-bogus`.
 
 ```
 app/
-  layout.tsx                 Root layout, fonts, skip-to-content link
+  layout.tsx                 Root layout, fonts, skip-to-content link, AccountProvider
   page.tsx                   Landing page composition
   not-found.tsx              Honest 404 page
-  u/[username]/page.tsx      Public demo profile route (Phase 2)
+  u/[username]/page.tsx      Public profile route (Phase 2 demo; Phase 5 registered)
+  sign-in/ sign-up/          Email + password auth (Phase 5)
+  forgot-password/ reset-password/
+  onboarding/                Create the account's single profile (Phase 5)
+  account/                   Email, privacy, sign out (Phase 5)
+  auth/callback/route.ts     PKCE / email-confirmation exchange (Phase 5)
+  api/profile/route.ts       GET + POST the signed-in owner's profile
+  api/profile/avatar/        Avatar upload -> private bucket
+  api/profile/avatar-url/    Mints a short-lived signed avatar URL
   globals.css                Design tokens, base styles, reduced-motion handling
+middleware.ts                Session refresh (Phase 5)
+supabase/migrations/         profiles table, RLS policies, avatars bucket (Phase 5)
 components/
-  SiteNav.tsx                Responsive navigation with mobile drawer
+  SiteNav.tsx                Responsive navigation; avatar + account menu when signed in
   SiteFooter.tsx             Multi-column footer
   Wordmark.tsx               Wordmark + PrismSymbol SVG
   Hero.tsx                   Phase 1 hero with integrated profile preview
@@ -863,6 +1108,152 @@ Verified at **360 / 390 / 430 / 768 / 832 / 1024 / 1280 / 1440** with zero horiz
 
 The My Clicks gallery intentionally uses a horizontal scroller on mobile; it never grows the page width.
 The Phase 2.2 soundtrack renders a square album cover that scales per viewport (96→144px) without stretching, and the Spotify embed iframe is verified to mount with the official `/embed/track/...` URL when Listen is pressed and to leave the DOM when Stop is pressed.
+The My Clicks gallery intentionally uses a horizontal scroller on mobile; it never grows the page width.
+The Phase 2.2 soundtrack renders a square album cover that scales per viewport (96→144px) without stretching, and the Spotify embed iframe is verified to mount with the official `/embed/track/...` URL when Listen is pressed and to leave the DOM when Stop is pressed.
+
+### Phase 4.6 — Custom Link Buttons and the Soundtrack List
+
+**Custom Link Buttons are a top-level profile section.** They were rendered
+*inside* the `clicks` section, immediately above the My Clicks gallery, so they
+inherited that section's heading, spacing, and position — which is why they read as
+part of the gallery rather than as destinations in their own right.
+
+`links` is now a real `SectionId` in `lib/profileDraft.ts`, which means the existing
+section-ordering model drives it and the studio's reorder UI lists it for free. The
+canonical order is:
+
+```
+header → soundtrack → collections → custom links → recent activity → My Clicks
+```
+
+One subtlety worth recording, because the obvious implementation is wrong: a draft
+saved in Phase 4.5 stores four section ids and has no `links` at all. Appending the
+missing id would land the buttons *after* My Clicks — precisely the reported bug. So
+`readDraft` inserts each missing section before the first present section that follows
+it canonically, preserving any deliberate reordering the owner already made.
+
+**The buttons.** Link-in-bio proportions, capped so a wide desktop looks composed
+rather than stretched: `min-height: 3.25rem` (52 px) at every viewport and `3.5rem`
+(56 px) from 640 px up, inside a `max-width: 34rem` column. `min-height` rather than
+`height` is deliberate — a wrapping label grows the button instead of being clipped.
+The label is the only visible text; the destination is never printed.
+
+| Option | Values | Effect |
+| --- | --- | --- |
+| Shape | `rounded` (14 px) / `rect` (6 px) / `pill` (999 px) | Corner treatment only. Height and padding are identical across all three, so changing shape never changes layout. |
+| Style | `solid` / `outline` / `tint` | Which surface and label colours resolve. A solid border is a darkened shade of the button's own accent — not `transparent`, because a transparent border is not theme-aware and made every theme report the same value. |
+| Colour | theme accent / custom hex | With no custom accent the `--pf-link-accent` variable is simply left unset, so the button follows the theme for free. A custom accent derives its own hover, focus, and outline shades with `color-mix`, and `readableTextOn()` picks dark or light label ink from the WCAG relative luminance of the fill. |
+| Layout | `stack` (default) / `grid` | `grid` is honoured only when it genuinely fits — three or more buttons and no label over 22 characters. It also collapses to one column below 640 px, where two buttons per row would force every label onto two lines. |
+
+Every option is verified by measuring the *rendered* result, not by reading back the
+stored field — a control that only updates its selected state would satisfy a
+data-level test and change nothing a visitor can see.
+
+### The Soundtrack List overflow — measured, not assumed
+
+The reported symptom was "hovering expands the card and it overflows the list". The
+measurement contradicted every part of that:
+
+| Hypothesis | Measured |
+| --- | --- |
+| A scale transform on hover | `transform: none` on the row, before and during |
+| Image sizing | Thumbnail a constant 52×52 (mobile) / 56×56 (desktop) throughout |
+| Padding / margin change | Unchanged across the hover |
+| An animation reflow | None present |
+
+The actual cause was a **negative inline margin** used to widen the hover target:
+
+```css
+.pf-soundtrack-row--link,
+.pf-soundtrack-row:has(a) {
+  margin-inline: -0.625rem;
+  padding-inline: 0.625rem;
+}
+```
+
+The padding compensated for the margin, so the *text* never moved and the row looked
+unchanged at rest — but every linkable row's box was 20 px wider than the list and
+hung 10 px outside it on both sides. The list measured
+`scrollWidth − clientWidth === 10` at **every** viewport, **before** any hover. Rows
+matched `--link, :has(a)` were 353 px wide inside a 333 px container while the one row
+that matched neither sat at 333 px, which is why the defect looked intermittent.
+
+The fix removes the negative margin entirely. The hover tint now comes from a
+background colour plus an **inset** `box-shadow`, which paints inside the row's own box
+and cannot widen it. Rows are `width: 100%` with `box-sizing: border-box`, so the
+list now measures zero overflow at every viewport.
+
+Hover feedback is retained and deliberately paint-only: a background transition, a
+border-colour change, an accent title colour, and a 1.03 scale on the artwork's inner
+`<img>` — contained by the thumbnail's existing `overflow: hidden`, so the 52×52
+container never changes. Reduced-motion and touch both drop the scale and keep the
+colour feedback.
+
+---
+
+### Phase 4.7 — Editable Custom Links copy and the Soundtrack List
+
+#### The section's three lines of copy are now profile data
+
+The eyebrow (`Elsewhere`), the heading (`Where to find Noir.`), and the description
+(`Other work, other rooms, other ways in.`) were string literals inside
+`PublicProfileContent.tsx`. An owner could name their buttons but could never introduce
+them. They are now one typed record, `CustomLinksSection`, stored beside the button list
+rather than duplicated onto every button:
+
+| Layer | What it does |
+| --- | --- |
+| `lib/noirProfile.ts` | `CustomLinksSection` type + `DEFAULT_CUSTOM_LINKS_SECTION` constants. The defaults are the exact strings that were hardcoded, so an un-customised profile renders identically. |
+| `lib/profileDraft.ts` | `customLinksSection` on `ProfileDraft`; `readCustomLinksSection` repairs it field by field. |
+| `lib/effectiveProfile.ts` | Passes the record through untouched. |
+| `components/ProfileCustomLinks.tsx` | `CustomLinksSectionHeader` — the one renderer, shared by the public page and the studio preview. |
+| `components/studio/CustomLinksPanel.tsx` | The **Custom Links Section Appearance** group: eyebrow and heading inputs, a multiline description textarea, and a "Restore default text" action. |
+
+Four decisions worth stating:
+
+**The heading is never derived from the display name.** `Where to find Noir.` is only the
+demo's default copy. The owner types whatever they want.
+
+**Empty means absent, not blank.** An empty field drops its element *and its margin*, which
+is why the spacing between the three lines is conditional rather than a fixed `mt-*`. A
+description with no heading must not inherit the heading's top margin and leave a hole. The
+buttons render either way.
+
+**Backward compatibility is one branch.** A draft written before this phase has no
+`customLinksSection` key at all, so `isObject(input)` is false and `readCustomLinksSection`
+returns the defaults. Custom buttons and every other setting are untouched. Drafts in the
+wild are also *partially* formed, so each field is repaired independently: a missing or
+non-string value takes that field's default, an over-long value is truncated rather than
+rejected, and an empty string is preserved verbatim — it is a deliberate "hide this line",
+and treating it as missing would make removing a line impossible.
+
+**The studio writes on every keystroke.** Unlike the button form, which stages and commits
+on save, these three fields update the draft immediately so the preview updates as you type.
+They resolve through the same `--pf-*` tokens as the rest of the profile, so a theme or
+typography change moves them with everything else and no colour is hardcoded.
+
+#### The Soundtrack List was not overflowing
+
+This was measured rather than assumed, at 320 / 360 / 390 / 430 / 768 across all three
+typography and layout presets, on the shipped demo profile, on a seeded draft, in the studio's
+390 px live-preview iframe, at rest, during a real CDP hover, and under keyboard focus.
+
+**No row overflowed at any of them.** `list.scrollWidth − list.clientWidth === 0` and
+`document.scrollWidth − clientWidth === 0` everywhere; every row, artwork, metadata block, and
+rating badge sat inside the collection's content box. Phase 4.6 had already fixed the real
+cause — the `margin-inline: -0.625rem` on linkable rows — and its suite still passes 72/72.
+
+So there was nothing to repair, and the brief's other suspicions were each ruled out by
+measurement: artwork is a fixed square, the metadata column is `minmax(0, 1fr)` so it shrinks
+rather than pushing, `box-sizing: border-box` keeps padding inside the row, hover is
+paint-only, and the row-as-link carries no separate external-link button.
+
+**What was genuinely wrong was silent, not overflowing.** `.pf-soundtrack-artist` was
+`white-space: nowrap` with an ellipsis, so a long album name was cut mid-word with no
+indication anything had been dropped — the measurement showed 200–300 px of text discarded
+at 320 px and 360 px. It now wraps onto a second line, capped at two, so the common case
+reads in full and only a genuinely over-long name truncates, visibly. Width behaviour is
+unchanged: `overflow-wrap: anywhere` inside a `minmax(0, 1fr)` column still cannot widen the row.
 
 ---
 

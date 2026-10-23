@@ -25,9 +25,15 @@ import { Reveal } from "@/components/Reveal";
 import { CollectionBlock } from "@/components/CollectionCards";
 import { ActivityList } from "@/components/ActivityList";
 import { MyClicksGallery } from "@/components/MyClicksGallery";
+import { ProfileCustomLinks, CustomLinksSectionHeader } from "@/components/ProfileCustomLinks";
 import type { ProfileOwner, ProfileCollection } from "@/lib/noirProfile";
 import { noirProfile } from "@/lib/noirProfile";
-import { SECTION_LABELS, type SectionId, type ProfileDraft } from "@/lib/profileDraft";
+import {
+  DEFAULT_SECTION_ORDER,
+  SECTION_LABELS,
+  type SectionId,
+  type ProfileDraft,
+} from "@/lib/profileDraft";
 import { materializeCollections, buildDemoCollectionLookup } from "@/lib/effectiveProfile";
 
 interface PublicProfileContentProps {
@@ -54,11 +60,11 @@ export function PublicProfileContent({
             .filter(([, on]) => Boolean(on))
             .map(([id]) => id),
         )
-      : new Set<SectionId>(["soundtrack", "collections", "activity", "clicks"]);
+      : new Set<SectionId>(DEFAULT_SECTION_ORDER);
   const order: SectionId[] =
     respectSectionVisibility && draft
       ? draft.sectionOrder
-      : ["soundtrack", "collections", "activity", "clicks"];
+      : DEFAULT_SECTION_ORDER;
 
   /*
    * Collections. `owner` already carries materialized demo item content (see
@@ -95,6 +101,7 @@ export function PublicProfileContent({
                 aria-label={SECTION_LABELS[id]}
                 key={id}
                 className="profile-canvas mt-8 md:mt-10"
+                data-testid="soundtrack-section"
               >
                 <Reveal>
                   <ProfileSoundtrack soundtrack={soundtrack} />
@@ -109,6 +116,7 @@ export function PublicProfileContent({
                 aria-labelledby="collections-heading"
                 key={id}
                 className="profile-canvas pf-section"
+                data-testid="collections-section"
               >
                 <Reveal>
                   <header className="mb-7 md:mb-9">
@@ -160,6 +168,7 @@ export function PublicProfileContent({
                 aria-labelledby="activity-heading"
                 key={id}
                 className="profile-canvas pf-section"
+                data-testid="activity-section"
               >
                 <Reveal>
                   <header className="mb-6 md:mb-7">
@@ -182,12 +191,69 @@ export function PublicProfileContent({
             );
           }
 
+          /*
+           * Phase 4.6 — Custom Link Buttons are their own section, between the
+           * collections and the activity ledger.
+           *
+           * In Phase 4.5 this markup lived *inside* the `clicks` section,
+           * immediately above the gallery. That is the whole of the reported
+           * problem: the buttons inherited My Clicks' heading, spacing and
+           * position, so they read as part of the gallery instead of as a
+           * profile section in their own right.
+           *
+           * `ProfileCustomLinks` returns `null` when nothing is renderable, but
+           * the guard below matters more: returning early means an owner with no
+           * valid buttons gets no `<section>` at all, so there is no heading, no
+           * border, and — critically — no `.pf-section` padding leaving a blank
+           * gap where the buttons would have been.
+           */
+          if (id === "links") {
+            const links = owner.customLinks;
+            if (!links || links.length === 0) return null;
+            return (
+              <section
+                aria-labelledby="links-heading"
+                key={id}
+                className="profile-canvas pf-section"
+                data-testid="links-section"
+              >
+                {/*
+                 * Phase 4.7 — the eyebrow / heading / description were hardcoded
+                 * literals in this file until now. They are owner data, rendered
+                 * by the same component the studio preview uses, so the two can
+                 * never disagree.
+                 *
+                 * The heading is NOT derived from `firstName`. "Where to find
+                 * Noir." was only ever the demo's default copy; the owner types
+                 * whatever they want, including a heading with no relationship to
+                 * their display name.
+                 *
+                 * The `<header>` is wrapped in `Reveal` only when there is copy to
+                 * show — `CustomLinksSectionHeader` returns `null` for an
+                 * all-blank section, and a `Reveal` around a `null` would leave an
+                 * empty `.reveal` div contributing its own height.
+                 */}
+                {owner.customLinksSection?.eyebrow ||
+                owner.customLinksSection?.heading ||
+                owner.customLinksSection?.description ? (
+                  <Reveal>
+                    <CustomLinksSectionHeader copy={owner.customLinksSection} />
+                  </Reveal>
+                ) : null}
+                <Reveal delay={120}>
+                  <ProfileCustomLinks links={links} />
+                </Reveal>
+              </section>
+            );
+          }
+
           if (id === "clicks") {
             return (
               <section
                 aria-labelledby="clicks-heading"
                 key={id}
                 className="profile-canvas pf-section"
+                data-testid="clicks-section"
               >
                 <Reveal>
                   <header className="mb-7 md:mb-9">
@@ -238,9 +304,19 @@ function CollectionHeader({ collection }: { collection: ProfileCollection }) {
         >
           {collection.name}
         </h3>
+        {/*
+         * Phase 4.7 — the item count only.
+         *
+         * This line used to read "4 items · public". The visibility word was
+         * leaking owner-facing chrome into the public profile: a visitor cannot
+         * act on it, and on a collection that *is* public it is stating the
+         * obvious. Per-collection visibility is still editable in the studio's
+         * Collections panel, where it belongs — it just no longer prints itself
+         * on the card.
+         */}
         <span className="pf-collection-meta shrink-0">
           {collection.items.length}{" "}
-          {collection.items.length === 1 ? "item" : "items"} · {collection.visibility}
+          {collection.items.length === 1 ? "item" : "items"}
         </span>
       </div>
       {collection.description && (

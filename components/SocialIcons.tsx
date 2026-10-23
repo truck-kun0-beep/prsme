@@ -38,15 +38,40 @@ function InstagramGlyph(props: SVGProps<SVGSVGElement>) {
     </svg>
   );
 }
+/*
+ * Phase 4.7 — the Snapchat ghost was replaced; the previous path was not merely
+ * ugly, it was geometrically wrong.
+ *
+ * The old path used a huge arc (`A36 36`) to close the body back to its start,
+ * which swept the curve far outside the 24x24 viewBox. Measured, the outline
+ * started 5.85 units left of x=0 and ran 1.41 units past y=24, so the SVG
+ * viewport clipped the left flank and the bottom rim. The same flaw made the
+ * shape 13.44 units of left/right asymmetry and left its centre 4.27 units off
+ * x=12 — which is why it never lined up with the Facebook, Instagram, and
+ * LinkedIn glyphs sitting beside it.
+ *
+ * The replacement is a plain path with no arc flag. Every control point on the
+ * left half is the 24-x mirror of its counterpart on the right, so the outline
+ * is point-symmetric by construction rather than by eye; verified via
+ * getBBox()/getTotalLength(), it measures 17x17.6 inside the box, centred on
+ * x=12, with 0 asymmetry. The two dots are the ghost's face and are placed on
+ * the same mirror axis, so they mirror each other too.
+ */
 function SnapchatGlyph(props: SVGProps<SVGSVGElement>) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" aria-hidden {...props}>
-      <path
-        d="M12 2.5c4.3 0 6.6 3 6.6 6.7 0 1.6-.05 3.05-.18 4.3.78.4 1.58.78 2.42.78.5 0 .66.66.2.93-1.5.86-2.96 1.04-3.42 1.45-.32.28-.22.92 1.05 1.95.85.69 1.78 1.18 1.78 1.61 0 .4-.36.49-1.66.7-1.4.23-1.66.32-2.04.97-.5.86-1.66 1.16-2.92 1.16-.66 0-1.27-.16-1.7-.16-.62 0-.78.4-1.8 1.34-.74.68-1.6 1.1-2.6 1.18-.99-.08-1.86-.5-2.6-1.18-1.02-.94-1.18-1.34-1.8-1.34-.43 0-1.04.16-1.7.16-1.26 0-2.42-.3-2.92-1.16-.38-.65-.64-.74-2.04-.97-1.3-.21-1.66-.3-1.66-.7 0-.43.93-.92 1.78-1.61 1.27-1.03 1.37-1.67 1.05-1.95-.46-.41-1.92-.59-3.42-1.45-.46-.27-.3-.93.2-.93.84 0 1.64-.38 2.42-.78A36 36 0 0 1 5.4 9.2c0-3.7 2.3-6.7 6.6-6.7Z"
-        stroke="currentColor"
-        strokeWidth="1.4"
-        strokeLinejoin="round"
-      />
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinejoin="round"
+      strokeLinecap="round"
+      aria-hidden
+      {...props}
+    >
+      <path d="M12 2.8C16.1 2.8 20.5 5.7 20.5 10.6c0 3.4-.8 6-1.9 7.4-.5.7-1.2 1.5-2.1 1.5-1.9 0-2.7-2.3-4.5.9C10.2 17.2 9.4 19.5 7.5 19.5c-.9 0-1.6-.8-2.1-1.5C4.3 16.6 3.5 14 3.5 10.6 3.5 5.7 7.9 2.8 12 2.8Z" />
+      <circle cx="9.3" cy="11.4" r="1.25" fill="currentColor" stroke="none" />
+      <circle cx="14.7" cy="11.4" r="1.25" fill="currentColor" stroke="none" />
     </svg>
   );
 }

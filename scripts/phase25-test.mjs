@@ -66,22 +66,33 @@ function main() {
           `links=${o.externalLinksCount} target=${o.spotifyAnchorTarget} rel=${o.spotifyAnchorRel}`,
         ],
         [
-          "anchor links to the configured Spotify URL (album)",
-          o.spotifyAnchorHref === "https://open.spotify.com/album/6fu8fvc7O4p8Gb8KMTBTUW",
-          `href=${o.spotifyAnchorHref}`,
+          // Phase 4.6 — provider-agnostic. This used to require one specific
+          // open.spotify.com album URL, which stopped holding when the card
+          // became provider-aware and the demo destination became Apple Music.
+          // The replacement is stricter, not looser: the card must DECLARE a
+          // provider, its href must belong to that provider, and its accessible
+          // name must name the same provider. A card that pointed at Apple Music
+          // while announcing Spotify would now fail — the exact contradiction the
+          // hardcoded string could not detect.
+          "anchor declares a provider and its href belongs to that provider",
+          typeof o.brandProvider === "string" && o.brandProvider.length > 0 &&
+            o.hrefMatchesProvider === true,
+          `provider=${o.brandProvider} href=${o.spotifyAnchorHref}`,
         ],
         [
-          "anchor is logo-only — no visible 'Spotify' text in the link content",
-          !/(listen\s+on\s+spotify|spotify)/i.test(o.spotifyAnchorVisibleText ?? ""),
+          "anchor is logo-only — no visible provider name in the link content",
+          !/(listen\s+on\s+(spotify|apple\s+music)|spotify|apple\s+music)/i.test(o.spotifyAnchorVisibleText ?? ""),
           `text="${o.spotifyAnchorVisibleText}"`,
         ],
         [
-          "anchor carries an accessible name with the track and artist",
-          /listen to .+ on spotify/i.test(o.spotifyAnchorAccessibleName ?? ""),
+          "anchor carries an accessible name naming track, artist, and provider",
+          o.brandProvider === "spotify"
+            ? /listen to .+ on spotify/i.test(o.spotifyAnchorAccessibleName ?? "")
+            : /listen to .+ on apple music/i.test(o.spotifyAnchorAccessibleName ?? ""),
           `aria-label="${o.spotifyAnchorAccessibleName}"`,
         ],
         [
-          "anchor is iconified with the Spotify brand <svg> (≥1 <path> child)",
+          "anchor is iconified with the provider brand <svg> (≥1 <path> child)",
           o.svgInsideSpotify && o.pathsInSpotifyGlyph >= 1,
           `svg=${o.svgInsideSpotify} paths=${o.pathsInSpotifyGlyph}`,
         ],

@@ -54,7 +54,7 @@ export function AppearancePanel() {
       <PanelCard
         testId="studio-appearance-themes"
         title="Theme"
-        description="Five complete palettes. Ratings, tags, hover and focus states all follow the chosen theme."
+        description="Eleven complete palettes — dark, light, and editorial. Ratings, tags, hover and focus states all follow the chosen theme."
       >
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-2">
           {THEME_PRESETS.map((t) => {
@@ -140,7 +140,7 @@ export function AppearancePanel() {
       <PanelCard
         testId="studio-appearance-typography"
         title="Typography"
-        description="Three voices built from the site's Inter, Instrument Serif, and JetBrains Mono."
+        description="Eight curated voices. Each preset uses one of the eight families resolved through next/font — no runtime stylesheet dependency."
       >
         <div className="grid grid-cols-1 gap-2.5">
           {TYPOGRAPHY_LIST.map((o) => {

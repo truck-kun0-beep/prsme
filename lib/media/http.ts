@@ -85,6 +85,10 @@ export const ALLOWED_ARTWORK_HOSTS = new Set<string>([
    * allowlisted separately as a *provider* for the metadata API.
    */
   "upload.wikimedia.org",
+  // Phase 4.3 — Wikimedia thumb CDN. Serves dynamically-sized JPEG/PNG
+  // derivatives of Commons files, used by the seeded My Clicks gallery
+  // (and reachable to a visitor who supplies their own Commons-hosted URL).
+  "thumb.wikimedia.org",
   // TVMaze show artwork.
   "static.tvmaze.com",
   "is1-ssl.mzstatic.com",

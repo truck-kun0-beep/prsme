@@ -15,8 +15,13 @@ import {
   type ProfileCollection,
   type ProfileSoundtrack,
   type Palette,
+  type ClicksPhoto,
+  type CustomLinkButton,
+  type CustomLinksSection,
+  type CollectionLayoutId,
   PALETTE_NAMES,
   noirProfile,
+  DEFAULT_CUSTOM_LINKS_SECTION,
 } from "./noirProfile";
 import {
   type ThemeId,
@@ -28,6 +33,20 @@ import {
   DEFAULT_LAYOUT,
   DEFAULT_BACKGROUND,
 } from "./theme";
+import {
+  THEME_IDS_ALL,
+  TYPOGRAPHY_LIST,
+} from "./profileTheme";
+import {
+  isSafeExternalUrl,
+  validateCustomLinkLabel,
+  validateCustomLinkUrl,
+  validateCustomLinkAccent,
+  readCustomLinkShape,
+  readCustomLinkStyle,
+  readCustomLinkColourMode,
+  readCustomLinkLayout,
+} from "./validate";
 
 export const PROFILE_DRAFT_KEY = "prsme:profile-draft:v1";
 export const PROFILE_DRAFT_VERSION = 1;
@@ -61,12 +80,18 @@ const DRAFT_MIGRATIONS: Migration[] = [
     const cols = raw.collections;
     if (!Array.isArray(cols)) return raw;
 
-    const KNOWN = new Set([
-      "poster-grid",
-      "featured",
-      "compact",
-      "soundtrack-list",
-    ]);
+    /*
+     * The recognised set must list *every* layout the renderer can draw.
+     *
+     * Phase 4.3 added `poster-wall`, `review-journal`, and `album-gallery`;
+     * `soundtrack-list` shipped in 4.2. An omission here is silent and total:
+     * a draft that saved `poster-wall` came back out of this pass as
+     * `compact`, so the chosen layout never survived a save -> reload cycle.
+     * `COLLECTION_LAYOUT_IDS` is the single source of truth for the ids, and
+     * it is declared further down this module — so the set is derived from it
+     * rather than restated, which makes a future layout impossible to forget.
+     */
+    const KNOWN = new Set<string>(COLLECTION_LAYOUT_IDS);
 
     return {
       ...raw,
@@ -109,14 +134,40 @@ function migrate(raw: unknown): unknown {
 export type ProfileVisibility = "public" | "followers" | "private";
 
 /** Section ids must be stable. The studio shows four of these tops of the public profile. */
-export type SectionId = "soundtrack" | "collections" | "activity" | "clicks";
+export type SectionId =
+  | "soundtrack"
+  | "collections"
+  | "links"
+  | "activity"
+  | "clicks";
 
 export const SECTION_LABELS: Record<SectionId, string> = {
   soundtrack: "Profile soundtrack",
   collections: "Curated shelves",
+  links: "Custom links",
   activity: "Recent activity",
   clicks: "My Clicks",
 };
+
+/**
+ * Phase 4.6 — the canonical public-profile order.
+ *
+ * `links` sits after `collections` and before `activity` so Custom Link Buttons
+ * are their own section rather than a child of My Clicks, and My Clicks stays
+ * last.
+ *
+ * This is also the repair path for a Phase 4.5 draft: its stored
+ * `sectionOrder` holds four ids and no `links`, so `readDraft` inserts the
+ * missing one *here* instead of appending it — which would have put the
+ * buttons after My Clicks.
+ */
+export const DEFAULT_SECTION_ORDER: SectionId[] = [
+  "soundtrack",
+  "collections",
+  "links",
+  "activity",
+  "clicks",
+];
 
 export interface ProfileDraft {
   version: number;
@@ -134,6 +185,33 @@ export interface ProfileDraft {
   avatarDataUrl: string | null; // data URL (browser-local only)
   collections: ProfileCollection[];
   soundtrack: ProfileSoundtrack | null;
+  /**
+   * Phase 4.3 — the My Clicks gallery, editable from the studio.
+   *
+   * Every entry stores a *reference* to externally hosted content (a direct
+   * image URL or a public post URL) and nothing else. PRSME never receives,
+   * proxies, or stores the picture itself, which is why there is no upload
+   * field here at all.
+   */
+  clicks: ProfileOwner["clicks"];
+  /**
+   * Phase 4.5 — owner-defined outbound buttons rendered just before My Clicks.
+   *
+   * Same contract as `clicks`: the draft stores only what the visitor needs to
+   * render the buttons, and an empty array is a real, honoured decision (hide
+   * the section) rather than a reason to fall back to the demo.
+   */
+  customLinks: CustomLinkButton[];
+  /**
+   * Phase 4.7 — the eyebrow / heading / description that introduce the Custom
+   * Links section, stored as ONE record beside the button list rather than as
+   * three fields duplicated across every button.
+   *
+   * Always present after `readDraft` (a missing or malformed value is repaired
+   * into the defaults), but any string may be empty: empty means "do not render
+   * this element", and the buttons render either way.
+   */
+  customLinksSection: CustomLinksSection;
   appearance: {
     theme: ThemeId;
     typography: TypographyId;
@@ -153,7 +231,24 @@ export interface ProfileDraft {
 
 /* -------------------------------------------------------------------------- */
 
-export function buildDefaultDraft(): ProfileDraft {
+/**
+ * Build the starting draft.
+ *
+ * `includeDemoClicks` is the one behavioural switch and it matters:
+ *
+ *   - `true`  (default, used by the *public profile* fallback) seeds the demo
+ *     gallery, so a first-time visitor sees a profile that is not bare.
+ *   - `false` (used by the *studio*) starts with an empty gallery, because the
+ *     studio edits what the owner actually has. Pre-filling the editor with
+ *     eight photographs the owner never added meant that "add two entries" left
+ *     ten, and the editor claimed credit for content it did not create. An
+ *     empty editor is the honest starting point; the demo photographs are a
+ *     public-page fallback, not an editable default.
+ */
+export function buildDefaultDraft(
+  options: { includeDemoClicks?: boolean } = {},
+): ProfileDraft {
+  const { includeDemoClicks = true } = options;
   const owner: ProfileOwner = noirProfile;
   return {
     version: PROFILE_DRAFT_VERSION,
@@ -170,6 +265,26 @@ export function buildDefaultDraft(): ProfileDraft {
     avatarDataUrl: null,
     collections: owner.collections.map((c) => ({ ...c, items: [...c.items] })),
     soundtrack: owner.soundtrack ? { ...owner.soundtrack } : null,
+    clicks: includeDemoClicks ? owner.clicks.map((c) => ({ ...c })) : [],
+    // Demo buttons seed the public-profile fallback but the studio starts
+    // empty, for the same reason the gallery does: the editor must show what
+    // the owner actually has, not content they never created.
+    customLinks: includeDemoClicks
+      ? (owner.customLinks ?? []).map((l) => ({ ...l }))
+      : [],
+    /*
+     * Phase 4.7 — section copy is seeded from the owner's record when it has one,
+     * else from the shared defaults.
+     *
+     * Note this is NOT gated on `includeDemoClicks`. The studio opens with an
+     * empty button list, but the three copy fields are always editable, so
+     * starting them blank would show placeholder prose in fields the owner has
+     * not touched yet — the same mistake an empty gallery would have been.
+     */
+    customLinksSection: {
+      ...DEFAULT_CUSTOM_LINKS_SECTION,
+      ...(owner.customLinksSection ?? {}),
+    },
     appearance: {
       theme: DEFAULT_THEME_ID,
       typography: DEFAULT_TYPOGRAPHY,
@@ -178,10 +293,16 @@ export function buildDefaultDraft(): ProfileDraft {
       accentOverride: null,
     },
     visibility: "public",
-    sectionOrder: ["soundtrack", "collections", "activity", "clicks"],
+    sectionOrder: [...DEFAULT_SECTION_ORDER],
     sectionVisibility: {
       soundtrack: true,
       collections: true,
+      /*
+       * Phase 4.6 — `links` defaults to visible. The section renders nothing at
+       * all when there is no valid button, so an owner who never configures one
+       * sees no gap, and one who does sees it without hunting for a toggle.
+       */
+      links: true,
       activity: true,
       clicks: true,
     },
@@ -189,14 +310,325 @@ export function buildDefaultDraft(): ProfileDraft {
 }
 
 /* -------------------------------------------------------------------------- */
+/*                    Custom Link Buttons (Phase 4.5)                          */
+/* -------------------------------------------------------------------------- */
+
+const MAX_CUSTOM_LINKS = 24;
+
+/**
+ * Read persisted Custom Link Buttons.
+ *
+ * Backwards compatibility is the whole job here. A draft written before Phase
+ * 4.5 has no `customLinks` key at all, so `Array.isArray(input)` is false and we
+ * fall back to the demo buttons — exactly how every other field migrates. The
+ * owner does not have to delete their saved customization to pick this feature
+ * up.
+ *
+ * An entry is dropped unless BOTH parts are valid: a non-empty label and an
+ * https destination. That is the same rule the studio enforces on save, so a
+ * hand-edited or corrupted `localStorage` value cannot put an empty button or a
+ * `javascript:` href on a public profile.
+ */
+function readCustomLinks(
+  input: unknown,
+  fallback: CustomLinkButton[],
+): CustomLinkButton[] {
+  if (!Array.isArray(input)) return fallback.map((l) => ({ ...l }));
+
+  const out: CustomLinkButton[] = [];
+  const seen = new Set<string>();
+
+  for (const raw of input.slice(0, MAX_CUSTOM_LINKS)) {
+    if (!isObject(raw)) continue;
+
+    const label = validateCustomLinkLabel(raw.label);
+    if (!label.ok || !label.label) continue;
+
+    const url = validateCustomLinkUrl(raw.url);
+    if (!url.ok || !url.url) continue;
+
+    // Stable id: keep the stored one when it is usable, otherwise mint one.
+    // Never the array index — a reorder must not rewrite an entry's identity.
+    let id = typeof raw.id === "string" && raw.id.trim() ? raw.id.trim().slice(0, 80) : "";
+    if (!id || seen.has(id)) {
+      const uuid =
+        typeof globalThis.crypto?.randomUUID === "function"
+          ? globalThis.crypto.randomUUID()
+          : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+      id = `lnk-${uuid}`;
+    }
+    seen.add(id);
+
+    /*
+     * Phase 4.6 — presentation fields.
+     *
+     * Each is read through its own validating reader and *omitted* when absent
+     * or unrecognised, rather than defaulted here. That keeps a stored button
+     * identical to what the owner actually saved, and leaves the renderer's
+     * defaults as the single place where "what does an absent field mean" is
+     * answered. A corrupt value is dropped rather than repaired: `shape:
+     * "blob"` falls back to the documented default instead of rendering an
+     * unstyled button.
+     */
+    const shape = readCustomLinkShape(raw.shape);
+    const style = readCustomLinkStyle(raw.style);
+    const colourMode = readCustomLinkColourMode(raw.colourMode);
+    const layout = readCustomLinkLayout(raw.layout);
+    const accent = validateCustomLinkAccent(raw.accent);
+
+    out.push({
+      id,
+      label: label.label,
+      url: url.url,
+      ...(shape ? { shape } : {}),
+      ...(style ? { style } : {}),
+      ...(colourMode ? { colourMode } : {}),
+      ...(layout ? { layout } : {}),
+      // An accent only means anything in custom mode, so we never carry a
+      // dangling colour around after the owner switches back to the theme.
+      ...(colourMode === "custom" && accent.ok && accent.accent
+        ? { accent: accent.accent }
+        : {}),
+    });
+  }
+
+  return out;
+}
+/* -------------------------------------------------------------------------- */
+/*                  Custom Links section copy (Phase 4.7)                      */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Per-field caps.
+ *
+ * These exist for the same reason `MAX_CUSTOM_LINKS` and `MAX_CLICKS` do: a
+ * draft is attacker-adjacent data once it lives in `localStorage`, and an
+ * unbounded string in a heading is a way to break the page rather than describe
+ * it. Each cap is well above what reads as copy — the eyebrow is a short label
+ * and the description is a sentence — and short enough that a pasted URL cannot
+ * become a wall of text on someone's profile.
+ */
+const MAX_CUSTOM_LINKS_EYEBROW = 40;
+const MAX_CUSTOM_LINKS_HEADING = 80;
+const MAX_CUSTOM_LINKS_DESCRIPTION = 200;
+
+/**
+ * Read the Custom Links section copy out of a saved draft.
+ *
+ * Backward compatibility is the whole job of this function. A draft written
+ * before Phase 4.7 has no `customLinksSection` key at all, so `isObject(input)`
+ * is false and we return `fallback` — the defaults. That single branch is what
+ * lets an owner who saved custom buttons in Phase 4.5 or 4.6 pick this feature
+ * up without retyping anything: their buttons survive, and the section keeps the
+ * copy it always had.
+ *
+ * The three fields are repaired independently, because drafts in the wild are
+ * partially formed:
+ *
+ *   - **Missing or non-string** → the default for that field alone. A draft
+ *     with a saved heading but no description still gets the default description
+ *     rather than losing the other two.
+ *   - **Present but too long** → truncated, never rejected. Losing the whole
+ *     heading because a paste carried 400 characters would be a worse outcome
+ *     than a clipped one.
+ *   - **Empty string** → preserved verbatim. This is a *decision*: "do not show
+ *     me an eyebrow." It must not be replaced by the default, or the owner would
+ *     have no way to remove a line at all.
+ *
+ * Newlines are collapsed to single spaces so a copied-in multi-line value cannot
+ * break the heading's line-height.
+ */
+function readCustomLinksSection(
+  input: unknown,
+  fallback: CustomLinksSection,
+): CustomLinksSection {
+  if (!isObject(input)) return { ...fallback };
+
+  return {
+    eyebrow: readCopyField(input.eyebrow, fallback.eyebrow, MAX_CUSTOM_LINKS_EYEBROW),
+    heading: readCopyField(input.heading, fallback.heading, MAX_CUSTOM_LINKS_HEADING),
+    description: readCopyField(
+      input.description,
+      fallback.description,
+      MAX_CUSTOM_LINKS_DESCRIPTION,
+    ),
+  };
+}
+
+/**
+ * One copy field, validated.
+ *
+ * Whitespace is collapsed rather than trusted — a pasted value can carry a
+ * newline or a run of tabs that is invisible in the renderer but breaks the
+ * heading's line-height — and the result is trimmed, because trailing spaces
+ * would make the renderer's "is this blank?" check disagree with the owner.
+ *
+ * A missing or non-string value falls back to the default for *this field only*,
+ * so one malformed entry cannot cost the other two. An empty string comes back
+ * as an empty string: that is a deliberate "hide this line", not a missing value,
+ * and it must survive the read unchanged or the owner could never remove a line.
+ */
+function readCopyField(
+  raw: unknown,
+  fallback: string | undefined,
+  max: number,
+): string {
+  if (typeof raw !== "string") return fallback ?? "";
+  const value = raw.replace(/\s+/g, " ").trim();
+  return value.length > max ? value.slice(0, max) : value;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                          My Clicks (Phase 4.3)                              */
+/* -------------------------------------------------------------------------- */
+
+const MAX_CLICKS = 40;
+
+/**
+ * Read the My Clicks gallery out of a saved draft.
+ *
+ * Three rules, all of them load-time rather than render-time, so a corrupt or
+ * hand-edited localStorage entry can never break the profile:
+ *
+ *  1. **Stable ids.** We require a string id and generate one only when the
+ *     entry has none. An array index is never used as an id — reordering must
+ *     not rewrite identity, and the React key must survive a move.
+ *  2. **Validated URLs.** `imageUrl` / `postUrl` / `sourceUrl` are only kept
+ *     when they pass `isSafeExternalUrl`. Anything else is dropped, which turns
+ *     that entry into a placeholder card rather than a broken image. A
+ *     `post` entry that loses its URL is demoted to `image` mode with no
+ *     image, so it still renders the honest "post unavailable" card.
+ *  3. **Required alt text.** `image` entries keep their alt text or inherit a
+ *     description built from the title, because an uncaptioned image in a
+ *     public gallery is invisible to anyone not looking at it.
+ *
+ * A draft with no `clicks` key at all (written before Phase 4.3) falls back to
+ * the demo gallery, matching how every other field migrates.
+ */
+function readClicks(
+  input: unknown,
+  fallback: ProfileOwner["clicks"],
+): ProfileOwner["clicks"] {
+  if (!Array.isArray(input)) return fallback.map((c) => ({ ...c }));
+
+  const out: ProfileOwner["clicks"] = [];
+  const seen = new Set<string>();
+
+  for (const raw of input.slice(0, MAX_CLICKS)) {
+    if (!isObject(raw)) continue;
+
+    const title = clampString(raw.title, 120);
+    if (!title) continue;
+
+    const mode: "image" | "post" = raw.mode === "post" ? "post" : "image";
+    const imageUrl = isSafeExternalUrl(raw.imageUrl) ? raw.imageUrl : undefined;
+    const postUrl = isSafeExternalUrl(raw.postUrl) ? raw.postUrl : undefined;
+    const postPlatform =
+      raw.postPlatform === "facebook" || raw.postPlatform === "instagram"
+        ? raw.postPlatform
+        : undefined;
+
+    /*
+     * A `post` entry is only honoured when it still has a URL *and* a known
+     * platform. Without either, we fall through to image mode so the card
+     * renders as "external post" instead of silently disappearing.
+     */
+    const effectiveMode: "image" | "post" =
+      mode === "post" && postUrl && postPlatform ? "post" : "image";
+
+    const id = stableClickId(raw.id, seen, out.length);
+
+    out.push({
+      id,
+      title,
+      ratio: CLICK_RATIOS.includes(raw.ratio as ClicksPhoto["ratio"])
+        ? (raw.ratio as ClicksPhoto["ratio"])
+        : "square",
+      palette: PALETTES.includes(raw.palette as ClicksPhoto["palette"])
+        ? (raw.palette as ClicksPhoto["palette"])
+        : "mono",
+      place: typeof raw.place === "string" ? clampString(raw.place, 80) : undefined,
+      mode: effectiveMode,
+      imageUrl: effectiveMode === "image" ? imageUrl : undefined,
+      postUrl: effectiveMode === "post" ? postUrl : undefined,
+      postPlatform: effectiveMode === "post" ? postPlatform : undefined,
+      altText:
+        typeof raw.altText === "string" && raw.altText.trim()
+          ? clampString(raw.altText, 240)
+          : `${title} — photograph from the owner's My Clicks gallery.`,
+      sourceUrl: isSafeExternalUrl(raw.sourceUrl) ? raw.sourceUrl : undefined,
+    });
+  }
+
+  return out;
+}
+
+const CLICK_RATIOS = ["tall", "wide", "square", "portrait"] as const;
+const PALETTES = [
+  "amber", "iris", "rose", "cyan", "forest", "sand", "mono", "violet", "rust",
+] as const;
+
+/**
+ * A stable id for a gallery entry.
+ *
+ * `crypto.randomUUID` is used when available; otherwise we fall back to a
+ * counter *seeded at read time* rather than an array index, which is the thing
+ * the brief rules out. The suffix keeps two entries created in the same
+ * millisecond from colliding.
+ */
+function stableClickId(
+  raw: unknown,
+  seen: Set<string>,
+  position: number,
+): string {
+  const candidate =
+    typeof raw === "string" && raw.trim()
+      ? raw.trim().slice(0, 80)
+      : typeof raw === "object" && raw !== null && "id" in raw
+      ? String((raw as { id: unknown }).id ?? "").trim().slice(0, 80)
+      : "";
+
+  if (candidate && !seen.has(candidate)) {
+    seen.add(candidate);
+    return candidate;
+  }
+
+  let id = "";
+  do {
+    const uuid =
+      typeof globalThis.crypto?.randomUUID === "function"
+        ? globalThis.crypto.randomUUID()
+        : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+    id = `click-${uuid}`;
+  } while (seen.has(id));
+  void position;
+  seen.add(id);
+  return id;
+}
+
+/* -------------------------------------------------------------------------- */
 /*                                Validation                                  */
 /* -------------------------------------------------------------------------- */
 
-const THEME_IDS: ThemeId[] = ["obsidian", "violet", "midnight", "rose-noir", "paper"];
-const TYPO_IDS: TypographyId[] = ["serif", "modern", "mono-led"];
+const THEME_IDS: ThemeId[] = THEME_IDS_ALL;
+const TYPO_IDS: TypographyId[] = TYPOGRAPHY_LIST.map((t) => t.id);
 const LAYOUT_IDS: LayoutPreset[] = ["editorial", "compact", "poster"];
 const BG_IDS: BackgroundTreatment[] = ["solid", "gradient", "paper-grain"];
-const SECTION_IDS: SectionId[] = ["soundtrack", "collections", "activity", "clicks"];
+const COLLECTION_LAYOUT_IDS: CollectionLayoutId[] = [
+  "poster-grid",
+  "featured",
+  "compact",
+  "soundtrack-list",
+  "poster-wall",
+  "review-journal",
+  "album-gallery",
+];
+/*
+ * Phase 4.6 — kept as an alias of `DEFAULT_SECTION_ORDER` rather than a second
+ * hand-written list. Two lists would drift, and the repair below depends on
+ * this array being in canonical order.
+ */
+const SECTION_IDS: SectionId[] = [...DEFAULT_SECTION_ORDER];
 const VISIBILITY_VALUES: ProfileVisibility[] = ["public", "followers", "private"];
 const SOC_PLATFORMS = ["facebook", "instagram", "snapchat", "linkedin"] as const;
 
@@ -281,6 +713,12 @@ export function readDraft(input: unknown): ProfileDraft {
         : fallback.soundtrack
         ? { ...fallback.soundtrack }
         : null,
+    clicks: readClicks(input.clicks, fallback.clicks),
+    customLinks: readCustomLinks(input.customLinks, fallback.customLinks),
+    customLinksSection: readCustomLinksSection(
+      input.customLinksSection,
+      fallback.customLinksSection,
+    ),
     appearance: {
       theme: THEME_IDS.includes(ap.theme as ThemeId)
         ? (ap.theme as ThemeId)
@@ -320,21 +758,57 @@ export function readDraft(input: unknown): ProfileDraft {
           : fallback.sectionVisibility.collections,
       activity:
         typeof vis.activity === "boolean" ? vis.activity : fallback.sectionVisibility.activity,
+      links:
+        typeof vis.links === "boolean" ? vis.links : fallback.sectionVisibility.links,
       clicks:
         typeof vis.clicks === "boolean" ? vis.clicks : fallback.sectionVisibility.clicks,
     },
   };
 
-  // De-duplicate section order and ensure all sections are represented.
+/*
+   * Normalise the stored order: de-duplicate it, then insert anything it was
+   * missing at its CANONICAL position rather than at the end.
+   *
+   * Phase 4.6 — this is the difference between "the buttons appear somewhere" and
+   * "the buttons appear in the right place". A Phase 4.5 draft stores four ids
+   * and has no `links` at all. The obvious repair is to append the missing ids,
+   * but that is exactly wrong here: it lands Custom Link Buttons *after*
+   * `clicks`, i.e. the reported bug this phase exists to fix. An earlier
+   * revision of this function did precisely that, and the browser test caught it
+   * (see `scripts/phase46-qa.mjs`, "Phase 4.5 draft is repaired").
+   *
+   * So each section is placed relative to its canonical neighbours:
+   *   - present sections keep the owner's chosen order among themselves, so a
+   *     deliberate reorder in the studio is preserved;
+   *   - a missing section is inserted before the first present section that
+   *     canonically follows it, and appended only if none does.
+   *
+   * Unrecognised ids are dropped: `sectionOrder` is read through `SECTION_IDS`
+   * above, so anything unknown never reaches this loop.
+   */
+  const deduped: SectionId[] = [];
   const seen = new Set<string>();
-  out.sectionOrder = [
-    ...out.sectionOrder.filter((s) => {
-      if (seen.has(s)) return false;
-      seen.add(s);
-      return true;
-    }),
-    ...SECTION_IDS.filter((s) => !seen.has(s)),
-  ];
+  for (const s of out.sectionOrder) {
+    if (seen.has(s)) continue;
+    seen.add(s);
+    deduped.push(s);
+  }
+
+  const repaired: SectionId[] = [];
+  for (let i = 0; i < SECTION_IDS.length; i++) {
+    const canonical = SECTION_IDS[i]!;
+    if (deduped.includes(canonical)) {
+      repaired.push(canonical);
+      continue;
+    }
+    // Not stored: slot it in before the next canonically-later section the owner
+    // actually has, so `links` lands between `collections` and `activity`.
+    const successor = SECTION_IDS.slice(i + 1).find((s) => repaired.includes(s));
+    if (successor) repaired.splice(repaired.indexOf(successor), 0, canonical);
+    else repaired.push(canonical);
+  }
+
+  out.sectionOrder = repaired;
 
   return out;
 }
@@ -343,19 +817,16 @@ function readCollection(c: Record<string, unknown>): ProfileCollection | null {
   const id = typeof c.id === "string" ? c.id.slice(0, 80) : "";
   if (!id) return null;
   /*
-   * Phase 4.2 — `soundtrack-list` joined the layout set. A draft written by an
-   * older build simply cannot contain it, so nothing migrates for this case;
-   * an *unknown* layout (a typo, or a future id read by an older build) falls
-   * back to `compact` rather than silently becoming a poster rail, because a
-   * dense list is the safer degradation for content we do not understand.
+   * Phase 4.3 — three layouts joined the set (`poster-wall`, `review-journal`,
+   * `album-gallery`). A draft written by an older build simply cannot contain
+   * them, so nothing migrates for that case. An *unknown* layout (a typo, or a
+   * future id read by an older build) falls back to `compact` rather than
+   * silently becoming a poster rail, because a dense list is the safer
+   * degradation for content we do not understand.
    */
-  const layout =
-    c.layout === "poster-grid" ||
-    c.layout === "featured" ||
-    c.layout === "compact" ||
-    c.layout === "soundtrack-list"
-      ? c.layout
-      : "compact";
+  const layout = COLLECTION_LAYOUT_IDS.includes(c.layout as CollectionLayoutId)
+    ? (c.layout as CollectionLayoutId)
+    : "compact";
   const visibility =
     c.visibility === "public" || c.visibility === "followers" || c.visibility === "private"
       ? c.visibility
@@ -444,7 +915,18 @@ function readProfileMediaItem(item: Record<string, unknown>): ProfileCollection[
 }
 
 function readSoundtrack(s: Record<string, unknown>): ProfileSoundtrack | null {
-  if (s.provider !== "spotify") return null;
+  /*
+   * Phase 4.5 - this no longer REQUIRES `provider: "spotify"`.
+   *
+   * The old guard was `if (s.provider !== "spotify") return null`, so a draft
+   * whose URL pointed at Apple Music was discarded outright unless it also lied
+   * and said `"spotify"`. That is precisely the contradiction the brief calls
+   * out: a stored `provider` label has no business disagreeing with the URL the
+   * card actually opens. The destination now decides. `provider` survives on
+   * the type only for back-compat; the provider used for the icon and the href
+   * is derived from the URL at render time (`resolveSoundtrackProvider`), so the
+   * mark and the destination can never disagree.
+   */
   const trackUrl = typeof s.trackUrl === "string" ? clampString(s.trackUrl, 600) : "";
   if (!trackUrl) return null;
   const palette: Palette =

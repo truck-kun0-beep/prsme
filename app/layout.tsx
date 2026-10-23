@@ -1,7 +1,18 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, Instrument_Serif, JetBrains_Mono } from "next/font/google";
+import {
+  Inter,
+  Instrument_Serif,
+  JetBrains_Mono,
+  Space_Grotesk,
+  Cormorant_Garamond,
+  DM_Sans,
+  Manrope,
+  IBM_Plex_Mono,
+  Outfit,
+} from "next/font/google";
 import "./globals.css";
 import { THEME_BOOT_SCRIPT } from "@/lib/themeBoot";
+import { AccountProvider } from "@/components/auth/AccountProvider";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -19,6 +30,60 @@ const display = Instrument_Serif({
 const mono = JetBrains_Mono({
   subsets: ["latin"],
   variable: "--font-mono",
+  display: "swap",
+});
+
+/* ---- Phase 4.3 typography additions ----
+ *
+ * Each of the five new typography presets needs at least one family that the
+ * project did not already ship. They are declared here (rather than in the
+ * presets) so `next/font` owns every download, self-hosting, and
+ * preload hint — the profile never requests a stylesheet from a third party at
+ * runtime. Every family below has a `system-ui` / `serif` / `monospace`
+ * fallback declared in `lib/profileTheme.ts`, so a blocked font file degrades
+ * to a sane local face instead of falling back to Times.
+ *
+ * Weights are kept to the minimum each role needs: the display face is only
+ * ever used at a heading weight, so two is the cap. */
+const grotesk = Space_Grotesk({
+  subsets: ["latin"],
+  weight: ["500", "600"],
+  variable: "--font-grotesk",
+  display: "swap",
+});
+
+const cormorant = Cormorant_Garamond({
+  subsets: ["latin"],
+  weight: ["500", "600"],
+  variable: "--font-cormorant",
+  display: "swap",
+});
+
+const dmSans = DM_Sans({
+  subsets: ["latin"],
+  weight: ["400", "500", "700"],
+  variable: "--font-dm-sans",
+  display: "swap",
+});
+
+const manrope = Manrope({
+  subsets: ["latin"],
+  weight: ["400", "500", "700"],
+  variable: "--font-manrope",
+  display: "swap",
+});
+
+const plexMono = IBM_Plex_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500"],
+  variable: "--font-plex-mono",
+  display: "swap",
+});
+
+const outfit = Outfit({
+  subsets: ["latin"],
+  weight: ["500", "600"],
+  variable: "--font-outfit",
   display: "swap",
 });
 
@@ -69,7 +134,11 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${display.variable} ${mono.variable}`}
+      className={
+        `${inter.variable} ${display.variable} ${mono.variable} ` +
+        `${grotesk.variable} ${cormorant.variable} ${dmSans.variable} ` +
+        `${manrope.variable} ${plexMono.variable} ${outfit.variable}`
+      }
       data-theme="obsidian"
       suppressHydrationWarning
     >
@@ -86,7 +155,19 @@ export default function RootLayout({
         >
           Skip to content
         </a>
-        {children}
+        {/*
+          * Phase 5 — one session subscription for the whole app.
+          *
+          * `AccountProvider` reads the Supabase session and publishes it to
+          * `useAccount()`. It is mounted here, at the root, rather than in each
+          * page so the nav and the Studio share a single subscription instead of
+          * each opening their own.
+          *
+          * It degrades to `unconfigured` when no Supabase project is attached,
+          * which is why this wrapper is safe on a build with no credentials:
+          * nothing below it calls `createClient()` unless configuration exists.
+          */}
+        <AccountProvider>{children}</AccountProvider>
       </body>
     </html>
   );

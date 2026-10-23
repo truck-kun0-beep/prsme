@@ -122,9 +122,13 @@ html[data-theme] body {
 }
 
 /* Phase 3 — Customization overlay.
- * When <body data-profile-override="active"> is set (a customization is
- * saved in localStorage), the server-rendered default profile becomes
- * inert and the customised version takes its place. */
+ *
+ * Phase 4.3: the "render both, CSS-hide the default" model is gone. When a
+ * saved customization exists, `PublicProfileOverride` *removes* the
+ * server-rendered `[data-default-profile]` subtree from the DOM on mount, so
+ * there is never a second hidden copy for a selector or a screen reader to
+ * trip over. What remains here is the no-JavaScript path: before the override
+ * hydrates there is nothing to show, so the mountpoint stays hidden. */
 body[data-profile-override="active"] [data-default-profile] {
   display: none;
 }
@@ -957,13 +961,79 @@ h3 {
 }
 .pf-soundtrack-row {
   display: grid;
+  /*
+   * `[artwork] [min-width:0; title + metadata] [optional rating]`
+   *
+   * The middle column takes `1fr` with `min-width: 0` so a long title wraps or
+   * clamps instead of pushing the rating off the edge, and the rating is `auto`
+   * so it never steals width from the text. Deliberately NOT
+   * `justify-content: space-between` — that is what produced the earlier
+   * "huge artificial gap between the artwork and the title" defect.
+   */
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 0.875rem;
-  padding-block: 0.85rem;
+  /*
+   * Phase 4.7 — inline padding.
+   *
+   * The row had `padding-block` only, so its artwork sat flush against the
+   * collection's own 1px side borders: the square cover was touching the left
+   * and right edges of the card it lives in, and on the last row it read as
+   * though the artwork were breaking out of the shelf. Horizontal breathing room
+   * is what a bordered row needs — the Compact rows already carry it.
+   *
+   * `box-sizing: border-box` is already set below, so this padding is inside the
+   * row's declared width. It cannot reintroduce the 10px overflow Phase 4.6
+   * removed by trading a negative margin for padding, because here the padding
+   * only ever makes the content box *narrower* than the row.
+   */
+  padding: 0.85rem 0.875rem;
   border-top: 1px solid var(--pf-border);
+  min-width: 0;
+  color: inherit;
+  text-decoration: none;
+  /*
+   * Phase 4.6 — geometry is now *stated* rather than incidental.
+   *
+   * The audit measured why rows appeared to grow and overflow on hover, and it
+   * was not a transform, an image size, or an animation. Those were all
+   * already correct:
+   *
+   *   - `.pf-soundtrack-row` had `transform: none` at rest AND during hover;
+   *   - the thumbnail measured an identical 52x52 (mobile) / 56x56 (desktop)
+   *     before, during, and after hover;
+   *   - `overflow: hidden` on the thumbnail already contained any inner scale.
+   *
+   * The actual cause was a *negative inline margin* used to widen the hover
+   * target:
+   *
+   *     .pf-soundtrack-row--link,
+   *     .pf-soundtrack-row:has(a) { margin-inline: -0.625rem; padding-inline: 0.625rem; }
+   *
+   * The padding kept the *text* in place, so the row looked unchanged at rest —
+   * but the row's box was 20px WIDER than the list, and it hung 10px past the
+   * list's left and right edges. That is a real overflow: the list measured
+   * `scrollWidth - clientWidth === 10` at every viewport, before any hover.
+   *
+   * So the repair is to stop making the row bigger than its container. The
+   * hover tint now comes from an inset `box-shadow` and a background colour,
+   * which paint inside the row's own box and cannot widen it. Nothing about the
+   * row's width depends on whether it is hovered.
+   *
+   * `width: 100%` plus `box-sizing` makes the row exactly the width of the `<li>`
+   * it sits in, at every viewport and in both layouts.
+   */
+  width: 100%;
+  box-sizing: border-box;
+  /* A row that shrinks cannot let long text push its neighbours around. */
+  min-height: 0;
 }
-.pf-soundtrack-row:first-child {
+/* The <li> is a thin wrapper so the anchor fills it exactly and the row
+   separator lines up on the anchor's own box. */
+.pf-soundtrack-item {
+  display: block;
+}
+.pf-soundtrack-item:first-child .pf-soundtrack-row {
   border-top: 0;
 }
 .pf-soundtrack-thumb {
@@ -985,37 +1055,943 @@ h3 {
 .pf-soundtrack-meta {
   min-width: 0;
 }
-.pf-soundtrack-link {
+.pf-soundtrack-title {
+  font-size: 1.0625rem;
+  line-height: 1.3;
+  color: var(--pf-text-strong);
+  overflow-wrap: break-word;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  transition: color 200ms ease;
+}
+.pf-soundtrack-artist {
+  margin-top: 0.1875rem;
+  color: var(--pf-text-muted);
+  /*
+   * Phase 4.7 — the artist/album line was `white-space: nowrap` with an ellipsis,
+   * which is honest but silent: a long album name was cut mid-word with no
+   * indication that anything had been dropped, and the measurement showed it
+   * discarding 200–300px of text at 320px and 360px.
+   *
+   * It now wraps onto a second line, capped at two, so the common case reads in
+   * full and only a genuinely over-long name is truncated — and when it is, the
+   * ellipsis is visible rather than implied. Width behaviour is unchanged: the
+   * metadata column is `minmax(0, 1fr)` and this is `overflow-wrap: anywhere`,
+   * so an unbroken string still cannot widen the row.
+   */
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+/* Plain-text review quote used by a LINKED row. An <a> inside an <a> is
+   invalid HTML and hijacks the row's click, so the words are rendered without
+   their own link (see `SoundtrackListCollection`). Quiet by design so it never
+   competes with the title. */
+.pf-soundtrack-quote {
+  margin-top: 0.25rem;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--pf-text-faint);
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.pf-soundtrack-rating {
+  display: flex;
+  align-items: center;
+  justify-self: end;
+  flex-shrink: 0;
+}
+
+/*
+ * Whole-row hover / focus treatment.
+ *
+ * Phase 4.6 — the tint is painted INSIDE the row's own box. The previous rule
+ * achieved a wider hover target with `margin-inline: -0.625rem` plus matching
+ * `padding-inline`, which left every linkable row 20px wider than the list and
+ * hanging 10px outside it on both sides — a permanent 10px overflow, measured at
+ * 360/390/430/768/832/1024/1280/1440. The padding hid it at rest, so it looked
+ * like a hover bug; it was a layout bug present at all times.
+ *
+ * An inset `box-shadow` gives the same "one object being activated" read, and the
+ * same rounded highlight, while adding zero pixels of width.
+ *
+ * `:has(a)` still covers a non-linked row whose review excerpt is a real link, so
+ * that row keeps its interactive feel without growing either.
+ */
+.pf-soundtrack-row--link,
+.pf-soundtrack-row:has(a) {
+  border-radius: 0.625rem;
+  transition:
+    background-color 200ms ease,
+    box-shadow 200ms ease;
+}
+.pf-soundtrack-row--link:hover,
+.pf-soundtrack-row--link:focus-visible,
+.pf-soundtrack-row:has(a):hover {
+  background-color: var(--pf-hover);
+  box-shadow: inset 0 0 0 1px var(--pf-border-strong);
+}
+.pf-soundtrack-row--link:hover .pf-soundtrack-title,
+.pf-soundtrack-row--link:focus-visible .pf-soundtrack-title,
+.pf-soundtrack-row:has(a):hover .pf-soundtrack-title {
+  color: var(--pf-accent);
+}
+.pf-soundtrack-row--link:focus-visible {
+  outline: 2px solid var(--pf-focus-ring);
+  outline-offset: 2px;
+}
+
+/*
+ * Phase 4.6 — artwork stays a fixed, clipped square at all times.
+ *
+ * The brief allows a small artwork transform provided it stays inside the
+ * thumbnail. `.pf-soundtrack-thumb` already has `overflow: hidden`, so scaling
+ * the *inner* image cannot escape the rounded box, and the container's own
+ * 52x52 / 56x56 measurement is unaffected by a transform on its descendant.
+ *
+ * 3% is deliberately smaller than the album card's 4%: on a 52px tile a larger
+ * scale visibly crops the cover against the rounded corner.
+ */
+.pf-soundtrack-thumb > [data-source] > img {
+  transition: transform 320ms var(--ease-soft);
+}
+.pf-soundtrack-row--link:hover .pf-soundtrack-thumb > [data-source] > img,
+.pf-soundtrack-row--link:focus-visible .pf-soundtrack-thumb > [data-source] > img,
+.pf-soundtrack-row:has(a):hover .pf-soundtrack-thumb > [data-source] > img {
+  transform: scale(1.03);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pf-soundtrack-thumb > [data-source] > img {
+    transition: none;
+  }
+  .pf-soundtrack-row--link:hover .pf-soundtrack-thumb > [data-source] > img,
+  .pf-soundtrack-row--link:focus-visible .pf-soundtrack-thumb > [data-source] > img,
+  .pf-soundtrack-row:has(a):hover .pf-soundtrack-thumb > [data-source] > img {
+    transform: none;
+  }
+}
+@media (min-width: 640px) {
+  .pf-soundtrack-row {
+    padding: 1rem;
+    gap: 1rem;
+  }
+  /*
+   * Desktop artwork is 56px (3.5rem) — the top of the 44-56px range the brief
+   * asks for, and large enough to read as a music tile rather than a thumbnail.
+   */
+  .pf-soundtrack-thumb {
+    width: 3.5rem;
+    height: 3.5rem;
+  }
+}
+
+/* --- Poster Wall (Phase 4.3) ------------------------------------------------
+ * A *wrapping* poster grid. This is the deliberate opposite of `.pf-shelf`,
+ * which is a horizontal rail: the wall has no `overflow-x`, so it can only
+ * ever grow downwards and can never widen the document.
+ *
+ * `auto-fill` + `minmax()` gives a few wide cards on a phone and more
+ * columns on a desktop without a single media query; the per-breakpoint
+ * column cap is a deliberate promise to the visitor that a 1440px screen
+ * does NOT lay the same four posters in a single row across the canvas.
+ * The wall is named "wall" because it always grows downward — the brief's
+ * brief is the same shape the name describes. */
+.pf-poster-wall {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9.25rem, 1fr));
+  gap: 1.25rem 1rem;
+  max-width: 100%;
+}
+@media (min-width: 640px) {
+  .pf-poster-wall {
+    grid-template-columns: repeat(auto-fill, minmax(10.5rem, 1fr));
+    gap: 1.5rem 1.125rem;
+  }
+}
+@media (min-width: 1024px) {
+  /*
+   * Desktop column cap: at this size the wall holds at most three cards per
+   * row, which is what makes a small shelf read as a wall rather than as a
+   * second rail. The floor is wide enough to keep the 2:3 ratio comfortable
+   * (≈14.5rem tall at the cap), and the gap is generous enough that the rows
+   * do not crowd.
+   */
+  .pf-poster-wall {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1.75rem 1.25rem;
+  }
+}
+.pf-wall-card {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* --- Review Journal (Phase 4.3) ---------------------------------------------
+ * An editorial row: artwork on the left, the owner's words in the middle,
+ * the rating on the trailing edge. On mobile the artwork shrinks instead of
+ * disappearing, so every entry still reads as "a thing I reviewed". */
+.pf-journal {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.pf-journal-entry {
+  display: grid;
+  grid-template-columns: 3.75rem minmax(0, 1fr);
+  gap: 0.875rem;
+  padding-block: 1.125rem;
+  border-top: 1px solid var(--pf-border);
+}
+.pf-journal-entry:first-child {
+  border-top: 0;
+  padding-top: 0.25rem;
+}
+.pf-journal-art {
+  position: relative;
+  overflow: hidden;
+  border-radius: 0.5rem;
+  border: 1px solid var(--pf-border);
+  aspect-ratio: 2 / 3;
+  background: var(--pf-surface-2);
+}
+.pf-journal-art > [data-source] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.pf-journal-body {
+  min-width: 0;
+}
+.pf-journal-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+@media (min-width: 640px) {
+  .pf-journal-entry {
+    grid-template-columns: 5rem minmax(0, 1fr);
+    gap: 1.125rem;
+    padding-block: 1.375rem;
+  }
+}
+
+/* --- Album Gallery (Phase 4.3) ----------------------------------------------
+ * Square, softly rounded covers in a wrapping grid. Distinct from Poster Wall
+ * by the 1:1 frame, the larger radius, and a minimum cover big enough to
+ * actually appreciate on a phone.
+ *
+ * Phase 4.4 — the card is the link. The small external-link button that used to
+ * sit *under* the artist line is gone: it read as a stray control floating
+ * below the artwork, it duplicated the only thing the card already implied, and
+ * it left the largest target on the page (the cover) inert. The whole card is
+ * now one real anchor, so there is exactly one thing to click and one
+ * focus ring to see. */
+.pf-album-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr));
+  gap: 1.25rem 1rem;
+  max-width: 100%;
+}
+@media (min-width: 640px) {
+  .pf-album-gallery {
+    grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+    gap: 1.5rem 1.125rem;
+  }
+}
+@media (min-width: 1024px) {
+  /*
+   * Album Gallery mirrors the Poster Wall's 3-column cap on desktop so both
+   * "wall-style" layouts wrap into multiple rows — a small shelf should read
+   * as a wall, not a row. The 1:1 frame at the cap is still substantial.
+   */
+  .pf-album-gallery {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1.75rem 1.25rem;
+  }
+}
+.pf-album-card {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  /* An anchor must not inherit the browser's blue underline / purple visited. */
+  color: inherit;
+  text-decoration: none;
+  /* Anchor and article share the box, so a linked card and a plain card line
+     up identically — there is no "linked cards sit 2px higher" artifact. */
+}
+.pf-album-frame {
+  position: relative;
+  overflow: hidden;
+  border-radius: 0.875rem;
+  border: 1px solid var(--pf-border);
+  background: var(--pf-surface-2);
+  aspect-ratio: 1 / 1;
+  transition:
+    transform 260ms var(--ease-soft),
+    border-color 200ms ease,
+    box-shadow 260ms var(--ease-soft);
+}
+/* The artwork itself eases into the lift instead of sitting rigid inside it. */
+.pf-album-frame > [data-source] > img {
+  transition: transform 420ms var(--ease-soft);
+}
+.pf-album-card:hover .pf-album-frame,
+.pf-album-card:focus-visible .pf-album-frame {
+  transform: translateY(-4px);
+  border-color: var(--pf-border-strong);
+  box-shadow: 0 12px 28px -14px rgba(0, 0, 0, 0.65);
+}
+.pf-album-card:hover .pf-album-frame > [data-source] > img {
+  transform: scale(1.04);
+}
+.pf-album-card:focus-visible {
+  outline: 2px solid var(--pf-focus-ring);
+  outline-offset: 4px;
+  border-radius: 0.875rem;
+}
+/* Title/artist warm up on hover so the card reads as one object, not a picture
+   with text parked underneath it. */
+.pf-album-title {
+  transition: color 180ms ease;
+}
+.pf-album-card:hover .pf-album-title,
+.pf-album-card:focus-visible .pf-album-title {
+  color: var(--pf-accent);
+}
+
+/* Softly rounded square artwork for the Soundtrack List rows. The base
+ * `.pf-soundtrack-thumb` keeps its tighter radius for backwards-compat; the
+ * music layouts opt into the softer one. */
+.pf-soundtrack-thumb--rounded {
+  border-radius: 0.75rem;
+}
+
+/* --- Custom Link Buttons (Phase 4.5, redesigned in 4.6) --------------------
+ * Owner-defined outbound buttons, now a full profile section in their own right.
+ *
+ * Phase 4.6 restates the layout because the old one is what the brief calls
+ * "too small and visually insignificant". That was not a colour problem — the
+ * buttons were already theme-driven. It was a SIZE problem, and the size came
+ * from two decisions:
+ *
+ *   - `flex: 0 1 auto` let each button shrink-wrap its own label, so a 42px-tall
+ *     pill was the largest thing on the page; and
+ *   - the list was a wrapping *row*, so two buttons sat side by side and read as
+ *     a toolbar of small chips rather than as destinations.
+ *
+ * So the default is now the link-in-bio arrangement the brief asks for: a
+ * vertical stack of full-width buttons, each at least 52px tall, inside a
+ * well-defined max-width column. On a wide desktop that column is deliberately
+ * capped at 34rem — a link button stretched to 1120px is not prominent, it is
+ * a banner, and centred labels 500px apart read as broken rather than calm.
+ *
+ * Colour is unchanged in spirit: every value is a `--pf-*` token, so a theme
+ * switch recolours the fill, border, label, and hover state together. There is
+ * no hardcoded lavender anywhere in this block. When the owner sets a custom
+ * accent, the component supplies `--pf-link-accent` and `--pf-link-on-accent`
+ * and everything below re-derives from those two variables via `color-mix`,
+ * which is why one colour choice stays coherent across all three styles. */
+.pf-custom-links {
+  min-width: 0;
+}
+.pf-custom-links-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  align-items: stretch;
+  /* The cap that makes a wide desktop look composed instead of stretched. */
+  width: 100%;
+  max-width: 34rem;
+}
+.pf-custom-links-item {
+  min-width: 0;
+  max-width: 100%;
+  display: flex;
+}
+
+/*
+ * Phase 4.6 — the opt-in grid.
+ *
+ * Only reachable when every button asked for `grid`, there are at least three of
+ * them, and no label is long enough to break (see `ProfileCustomLinks`). It is
+ * still a *grid* and not a flex row so the columns align across rows — two
+ * buttons of very different label lengths get equal cells instead of a ragged
+ * staircase.
+ */
+.pf-custom-links--grid .pf-custom-links-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+.pf-custom-link {
+  /*
+   * The measurements the brief asks for, expressed as tokens:
+   *
+   *   - `min-height: 3.25rem` = 52px, the stated floor, at every viewport.
+   *   - `--pf-link-h` is 3.5rem (56px) from 640px up, inside the 52-64px band.
+   *
+   * `min-height` rather than `height` is the important word: a label that wraps
+   * to two lines grows the button instead of being clipped or squeezed. The
+   * brief forbids both excessive height and clipped text, and `min-height` with
+   * wrapping padding is the only way to satisfy the two at once.
+   */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: var(--pf-link-h, 3.25rem);
+  padding: 0.75rem 1.5rem;
+  max-width: 100%;
+  border: 1px solid var(--pf-border);
+  background: var(--pf-link-bg, var(--pf-surface-2));
+  color: var(--pf-link-fg, var(--pf-text));
+  /*
+   * The label inherits the profile's display face, so the typography preset
+   * applies to the buttons exactly as it does to every other section heading.
+   */
+  font-family: var(--pf-font-display);
+  font-size: 1rem;
+  font-weight: var(--pf-display-weight);
+  line-height: 1.3;
+  letter-spacing: 0.005em;
+  text-align: center;
+  text-decoration: none;
+  /* A very long single word must not push the button past its container. */
+  overflow-wrap: break-word;
+  /*
+   * Colour and border only. `transform` is included because a 1px lift is a
+   * paint-only change and cannot reflow a neighbour — but nothing here
+   * transitions width, height, padding, or margin, which is exactly the class of
+   * property that made the Soundtrack List jump on hover.
+   */
+  transition:
+    transform 180ms var(--ease-soft),
+    color 160ms ease,
+    background-color 200ms ease,
+    border-color 200ms ease,
+    box-shadow 200ms var(--ease-soft);
+}
+.pf-custom-link:hover {
+  color: var(--pf-link-fg-hover, var(--pf-text-strong));
+  background: var(--pf-link-bg-hover, var(--pf-hover));
+  border-color: var(--pf-link-border-hover, var(--pf-border-strong));
+  box-shadow: var(--pf-link-shadow-hover, 0 10px 24px -16px rgba(0, 0, 0, 0.7));
+  /* A 1px lift. Small enough that adjacent buttons never appear to collide. */
+  transform: translateY(-1px);
+}
+.pf-custom-link:focus-visible {
+  outline: 2px solid var(--pf-focus-ring);
+  outline-offset: 3px;
+  color: var(--pf-link-fg-hover, var(--pf-text-strong));
+  border-color: var(--pf-link-border-hover, var(--pf-border-strong));
+}
+
+/* --- Shape ------------------------------------------------------------------
+ * `rounded` is the default: a 14px radius at a 56px height reads as a button.
+ * `pill` is a stadium and `rect` is nearly square. All three keep the same
+ * height and padding, so changing shape never changes layout. */
+.pf-custom-link--rounded {
+  border-radius: 0.875rem;
+}
+.pf-custom-link--rect {
+  border-radius: 0.375rem;
+}
+.pf-custom-link--pill {
+  border-radius: 999px;
+}
+
+/* --- Fill -------------------------------------------------------------------
+ * The three styles differ only in which surface and label colours they resolve
+ * to. They all read `--pf-link-accent`, so a custom accent recolours all three
+ * identically, and they all leave the *layout* untouched. */
+.pf-custom-link--solid {
+  background: var(--pf-link-accent, var(--pf-accent));
+  color: var(--pf-link-on-accent, #0b0b10);
+  /*
+   * Deliberately NOT `transparent`.
+   *
+   * A solid fill looks fine with no visible edge, and that was the first
+   * version — but it silently broke a stated requirement and an existing
+   * assertion (`scripts/phase45-theme-audio.mjs`, "theme changes the button
+   * border"). The brief asks for theme-aware background, border *and* text
+   * colours, and a transparent border is not theme-aware: every theme reported
+   * the same value.
+   *
+   * The edge is now a darkened shade of the button's own accent. It reads as a
+   * subtle seam rather than an outline, and because it derives from
+   * `--pf-link-accent` it still follows a custom colour and still differs per
+   * theme.
+   */
+  border-color: color-mix(
+    in srgb,
+    var(--pf-link-accent, var(--pf-accent)) 76%,
+    #000000
+  );
+}
+.pf-custom-link--solid:hover {
+  background: color-mix(
+    in srgb,
+    var(--pf-link-accent, var(--pf-accent)) 88%,
+    var(--pf-text-strong)
+  );
+  color: var(--pf-link-on-accent, #0b0b10);
+  border-color: color-mix(
+    in srgb,
+    var(--pf-link-accent, var(--pf-accent)) 64%,
+    #000000
+  );
+}
+.pf-custom-link--outline {
+  background: transparent;
+  color: var(--pf-link-accent, var(--pf-accent));
+  border-color: color-mix(
+    in srgb,
+    var(--pf-link-accent, var(--pf-accent)) 55%,
+    transparent
+  );
+}
+.pf-custom-link--outline:hover {
+  background: color-mix(
+    in srgb,
+    var(--pf-link-accent, var(--pf-accent)) 14%,
+    transparent
+  );
+  color: var(--pf-link-accent, var(--pf-accent));
+  border-color: var(--pf-link-accent, var(--pf-accent));
+}
+.pf-custom-link--tint {
+  background: color-mix(
+    in srgb,
+    var(--pf-link-accent, var(--pf-accent)) 16%,
+    var(--pf-surface-1)
+  );
+  color: var(--pf-text-strong);
+  border-color: color-mix(
+    in srgb,
+    var(--pf-link-accent, var(--pf-accent)) 28%,
+    transparent
+  );
+}
+.pf-custom-link--tint:hover {
+  background: color-mix(
+    in srgb,
+    var(--pf-link-accent, var(--pf-accent)) 26%,
+    var(--pf-surface-1)
+  );
+  color: var(--pf-text-strong);
+  border-color: color-mix(
+    in srgb,
+    var(--pf-link-accent, var(--pf-accent)) 48%,
+    transparent
+  );
+}
+
+@media (min-width: 640px) {
+  .pf-custom-links {
+    --pf-link-h: 3.5rem;
+  }
+  .pf-custom-links-list {
+    gap: 0.875rem;
+  }
+}
+
+/*
+ * Below 640px the grid is a single column anyway — two 52px-tall buttons side by
+ * side on a 360px phone forces every label onto two lines. Collapsing here means
+ * `grid` is a desktop refinement and never a mobile regression.
+ */
+@media (max-width: 639px) {
+  .pf-custom-links--grid .pf-custom-links-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pf-custom-link {
+    transition: none;
+  }
+  .pf-custom-link:hover {
+    transform: none;
+  }
+}
+
+/* --- My Clicks gallery (Phase 4.4) -------------------------------------------
+ *
+ * These classes did not exist before 4.4. The gallery was drawn with Tailwind
+ * utility classes and inline styles only, which is exactly why it looked wrong:
+ * there was no frame, no border, no radius, and above all **no hover rule at
+ * all** anywhere in the stylesheet. Cards could not lift, could not brighten,
+ * and had nothing to animate.
+ *
+ * Three pieces, chosen per viewport:
+ *
+ *   - `.pf-clicks-rail`  — phone. A touch rail with snap points.
+ *   - `.pf-clicks-grid`  — tablet and up. A wrapping grid; no scrolling needed.
+ *   - `.pf-clicks-card`  — the shared card, with real hover/focus motion.
+ *
+ * The rail bleeds into the profile's page gutter via negative margins so the
+ * first and last photographs are fully visible instead of being clipped by the
+ * canvas padding. Vertical page scrolling is untouched — only this one element
+ * scrolls on X.
+ */
+.pf-clicks {
+  min-width: 0;
+}
+
+/* --- Rail (phones) --------------------------------------------------------- */
+.pf-clicks-railwrap {
+  position: relative;
+  min-width: 0;
+}
+.pf-clicks-rail {
+  list-style: none;
+  margin: 0;
+  padding: 0 1.25rem;
+  display: flex;
+  gap: 14px;
+  /* The rail is the scroll container. `auto` on the inline axis with
+     `hidden` on the block axis keeps vertical page scrolling intact. */
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  /* Must not exceed the profile's own width, or it re-introduces the document
+     overflow that `.profile-scope { overflow-x: clip }` was hiding. */
+  max-width: 100%;
+  scroll-padding-inline: 1.25rem;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.pf-clicks-rail::-webkit-scrollbar {
+  display: none;
+}
+.pf-clicks-item {
+  /* An intentional width AND a refusal to shrink. Without `flex: 0 0 auto`
+     flexbox squeezes every card to share the row, which is what made the old
+     gallery look cramped and unresponsive on a phone. */
+  flex: 0 0 auto;
+  width: min(72vw, 17rem);
+  scroll-snap-align: start;
+}
+/*
+ * Phase 4.5 — the rail also honours the shape, so a landscape card is visibly
+ * wider than a portrait one.
+ *
+ * Widths are percentages of the RAIL'S OWN CONTENT BOX, not of the viewport.
+ * That matters: a card that is `84vw` wide does not fit the space a card
+ * actually gets once the rail's gutters and padding are taken out, so a
+ * start-snapped card stays clipped at its trailing edge (we measured a 328px
+ * card in a 295px snap slot — 12px permanently out of view, at every width).
+ * Sizing against the container makes "a card fits where it snaps" true by
+ * construction on every phone.
+ *
+ * SCOPED TO THE RAIL ON PURPOSE: these were previously bare
+ * `.pf-clicks-slot-*` rules, which the desktop grid also uses for `grid-column`
+ * spans — so they set a `width` on grid items too, overrode the grid entirely,
+ * and collapsed every card to the rail's width. A selector has to name the
+ * layout it belongs to.
+ *
+ * The percentages stay shape-distinct (wide > square/portrait > tall) and each
+ * is small enough to leave the next card peeking in as a scroll cue.
+ */
+.pf-clicks-rail .pf-clicks-slot-wide {
+  width: min(92%, 22rem);
+}
+.pf-clicks-rail .pf-clicks-slot-tall {
+  width: min(64%, 13.5rem);
+}
+.pf-clicks-rail .pf-clicks-slot-square,
+.pf-clicks-rail .pf-clicks-slot-portrait {
+  width: min(74%, 15rem);
+}
+
+/* --- Grid (tablet and up) --------------------------------------------------
+ * Phase 4.5 — a six-track editorial grid.
+ *
+ * The previous version used `repeat(auto-fill, minmax(13rem, 1fr))`, which at
+ * 1280px produced five identical 221px columns. A landscape photograph in a
+ * 221px cell reads as a miniature, and a portrait gets the same width as a
+ * square, so neither shape looked intentional. That was the "wide images are
+ * too small" defect.
+ *
+ * Six equal tracks instead, with each shape claiming a different number of
+ * them. One track is therefore exactly half a `wide` card and one sixth of the
+ * row, so the spans below are true ratios rather than approximate pixel values:
+ *
+ *   square   -> 2 tracks   (one standard tile)
+ *   portrait -> 2 tracks   (one standard tile, taller frame)
+ *   tall     -> 3 tracks   (~1.5x a standard tile)
+ *   wide     -> 4 tracks   (~2x a standard tile — landscape reads properly)
+ *
+ * `auto-fit` + `1fr` lets tracks collapse on narrower desktops; the spans are
+ * proportionally reduced by the media queries below so the grid can never
+ * overflow or leave a card stranded.
+ */
+.pf-clicks-grid {
+  display: none;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 1.5rem 1.25rem;
+}
+.pf-clicks-griditem {
+  min-width: 0;
+}
+@media (min-width: 768px) {
+  .pf-clicks-railwrap {
+    display: none;
+  }
+  .pf-clicks-grid {
+    display: grid;
+  }
+  .pf-clicks-slot-square {
+    grid-column: span 2;
+  }
+  .pf-clicks-slot-portrait {
+    grid-column: span 2;
+  }
+  .pf-clicks-slot-tall {
+    grid-column: span 3;
+  }
+  .pf-clicks-slot-wide {
+    grid-column: span 4;
+  }
+}
+/*
+ * At 768-1023px six tracks are too fine: a `wide` card's four tracks would be
+ * under 300px wide and a landscape photograph would again look miniature. Drop
+ * to four tracks on tablets, keeping the same ratios:
+ *
+ *   square/portrait -> 2 of 4  (standard tile)
+ *   tall            -> 2 of 4  with a taller frame
+ *   wide            -> 4 of 4  (full-width landscape)
+ *
+ * A `tall` tile at 2/4 is half the row's width, which is still a clear step up
+ * from a square and preserves its vertical composition.
+ */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .pf-clicks-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1.25rem 1rem;
+  }
+  .pf-clicks-slot-tall {
+    grid-column: span 2;
+  }
+}
+/*
+ * Below 768px the rail owns the gallery, so the grid is not rendered at all —
+ * these spans exist only to describe intent and keep the two layouts honest
+ * about the same shapes.
+ */
+@media (max-width: 767px) {
+  .pf-clicks-slot-wide {
+    grid-column: span 6;
+  }
+  .pf-clicks-slot-tall {
+    grid-column: span 3;
+  }
+  .pf-clicks-slot-square,
+  .pf-clicks-slot-portrait {
+    grid-column: span 2;
+  }
+}
+
+/* --- Card ------------------------------------------------------------------
+ * One card, used by both layouts, so the phone and the desktop grid cannot
+ * drift apart visually. */
+.pf-clicks-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 0;
+  /*
+   * Phase 4.5 — the card is frequently an `<a>`. Without these the browser
+   * would apply its default blue underline and visited-purple to the caption
+   * text, which would break with every theme. The card supplies its own colour
+   * and focus treatment instead.
+   */
+  color: inherit;
+  text-decoration: none;
+}
+.pf-clicks-frame {
+  position: relative;
+  overflow: hidden;
+  border-radius: 0.75rem;
+  border: 1px solid var(--pf-border);
+  background: var(--pf-surface-2);
+  transition:
+    transform 300ms var(--ease-soft),
+    border-color 220ms ease,
+    box-shadow 300ms var(--ease-soft);
+}
+/* The photograph and the placeholder both fill the frame exactly. */
+.pf-clicks-img,
+.pf-clicks-art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+/* Ease the image itself, so the card lifts and the photograph settles into it
+   instead of the two moving as one rigid slab. */
+.pf-clicks-frame > img,
+.pf-clicks-frame > [data-source] > img {
+  transition: transform 520ms var(--ease-soft);
+}
+.pf-clicks-card:hover .pf-clicks-frame,
+.pf-clicks-card:focus-within .pf-clicks-frame {
+  transform: translateY(-4px);
+  border-color: var(--pf-border-strong);
+  box-shadow: 0 14px 30px -16px rgba(0, 0, 0, 0.7);
+}
+.pf-clicks-card:hover .pf-clicks-frame > img,
+.pf-clicks-card:hover .pf-clicks-frame > [data-source] > img {
+  transform: scale(1.05);
+}
+
+.pf-clicks-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+}
+.pf-clicks-title {
+  font-size: calc(0.9375rem * var(--pf-meta-scale, 1));
+  line-height: 1.3;
+  color: var(--pf-text-strong);
+  transition: color 200ms ease;
+  overflow-wrap: break-word;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.pf-clicks-place {
+  color: var(--pf-meta);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pf-clicks-card:hover .pf-clicks-title {
+  color: var(--pf-accent);
+}
+/* Keyboard focus must be visible on the whole card now that it is a link. */
+.pf-clicks-card:focus-visible {
+  outline: 2px solid var(--pf-focus-ring);
+  outline-offset: 4px;
+  border-radius: 0.75rem;
+}
+
+/* Failed-load fallback. A first-class state, not an empty frame. */
+.pf-clicks-failed {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  padding: 1rem;
+  text-align: center;
+  background: var(--pf-surface-2);
+  font-family: var(--pf-font-meta);
+}
+.pf-clicks-failed-label {
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--pf-text-muted);
+}
+.pf-clicks-failed-hint {
+  font-size: 0.8125rem;
+  line-height: 1.35;
+  color: var(--pf-text-faint);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* --- Scroll controls -------------------------------------------------------
+ * Only shown on phones, where the rail is the only way to reach the last
+ * photograph. Their enabled/disabled state is driven by real scroll geometry
+ * in React, so they are never wrong about what is off-screen. */
+.pf-clicks-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-top: 0.875rem;
+}
+@media (min-width: 768px) {
+  .pf-clicks-controls {
+    display: none;
+  }
+}
+.pf-clicks-arrow {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 2rem;
   height: 2rem;
   flex-shrink: 0;
-  border-radius: 0.375rem;
+  border-radius: 9999px;
   border: 1px solid var(--pf-border);
+  background: var(--pf-surface-2);
   color: var(--pf-text-muted);
-  transition: color 200ms ease-soft, border-color 200ms ease-soft,
-    background-color 200ms ease-soft;
+  cursor: pointer;
+  transition:
+    color 180ms ease,
+    background-color 180ms ease,
+    border-color 180ms ease,
+    transform 180ms ease;
 }
-.pf-soundtrack-link:hover {
-  color: var(--pf-accent);
-  border-color: var(--pf-border-strong);
+.pf-clicks-arrow:hover:not(:disabled) {
+  color: var(--pf-text-strong);
   background: var(--pf-hover);
+  border-color: var(--pf-border-strong);
+  transform: scale(1.06);
 }
-.pf-soundtrack-link:focus-visible {
+.pf-clicks-arrow:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.pf-clicks-arrow:focus-visible {
   outline: 2px solid var(--pf-focus-ring);
   outline-offset: 2px;
 }
-@media (min-width: 640px) {
-  .pf-soundtrack-row {
-    padding-block: 1rem;
-    gap: 1rem;
-  }
-  .pf-soundtrack-thumb {
-    width: 4rem;
-    height: 4rem;
-  }
+.pf-clicks-cue {
+  font-size: 0.75rem;
+  color: var(--pf-text-faint);
+  white-space: nowrap;
+}
+/* A keyboard user tabbing into the rail must be able to scroll it. */
+.pf-clicks-rail:focus-visible {
+  outline: 2px solid var(--pf-focus-ring);
+  outline-offset: -2px;
+  border-radius: 0.75rem;
 }
 
 /* --- Poster rating placement ---------------------------------------------

@@ -81,9 +81,14 @@ function main() {
           `fakeControlButtons=${o.fakeControlButtons}`,
         ],
         [
+          // Phase 4.6 — provider-agnostic. This required an open.spotify.com href,
+          // which stopped holding once the soundtrack card became provider-aware
+          // and its demo destination became Apple Music. The replacement still
+          // asserts exactly one external link AND that it is a real, known music
+          // destination — it just accepts either provider instead of one.
           "exactly one primary external listen link",
           o.externalLinksCount === 1 &&
-            /^https:\/\/open\.spotify\.com\//.test(o.externalLinkHref ?? ""),
+            /^https:\/\/(open\.spotify\.com|music\.apple\.com)\//.test(o.externalLinkHref ?? ""),
           `externalLinks=${o.externalLinksCount} href=${o.externalLinkHref}`,
         ],
         [

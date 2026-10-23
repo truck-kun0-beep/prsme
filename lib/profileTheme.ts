@@ -231,17 +231,224 @@ const PAPER_TOKENS: ProfileTokens = {
   "--pf-overlay-via": "rgba(251,248,242,0.62)",
 };
 
+/* -------------------------------------------------------------------------- */
+/*                        Phase 4.3 — six new themes                           */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * These six were added for Phase 4.3. Each is a *complete* palette — surfaces,
+ * text, borders, accents, ratings, tags, and overlays all move together — and
+ * none is an accent-only reskin of an existing preset.
+ *
+ * The contrast floor that shaped the values below: body text and metadata sit
+ * at >= 4.5:1 against their own surface, and `--pf-rating-solid` (the rating
+ * chip body) is always an opaque colour so a score stays legible over a bright
+ * poster as well as over a dark page.
+ */
+
+/** Forest After Dark — deep green ground, muted sage highlights. */
+const FOREST_TOKENS: ProfileTokens = {
+  "--pf-bg": "#060D0A",
+  "--pf-surface-1": "#0A1410",
+  "--pf-surface-2": "#0F1D17",
+  "--pf-surface-3": "#15281F",
+  "--pf-text-strong": "#EDF5EF",
+  "--pf-text": "#D6E5DA",
+  "--pf-text-muted": "#93AC9C",
+  "--pf-text-faint": "#647C6D",
+  "--pf-border": "rgba(167,205,182,0.12)",
+  "--pf-border-strong": "rgba(167,205,182,0.22)",
+  "--pf-accent": "#A7CDB6",
+  "--pf-accent-strong": "#84B79A",
+  "--pf-accent-fg": "#06120C",
+  "--pf-accent-soft": "rgba(167,205,182,0.15)",
+  "--pf-hover": "rgba(167,205,182,0.11)",
+  "--pf-focus-ring": "rgba(167,205,182,0.58)",
+  "--pf-rating": "#B9DCC6",
+  "--pf-rating-bg": "rgba(167,205,182,0.14)",
+  "--pf-rating-border": "rgba(167,205,182,0.34)",
+  "--pf-rating-solid": "#0C1E16",
+  "--pf-rating-border-strong": "#3A6249",
+  "--pf-tag-bg": "rgba(167,205,182,0.09)",
+  "--pf-tag-text": "#C3DACB",
+  "--pf-tag-border": "rgba(167,205,182,0.20)",
+  "--pf-meta": "#6E8778",
+  "--pf-overlay-from": "rgba(6,13,10,0.94)",
+  "--pf-overlay-via": "rgba(6,13,10,0.58)",
+};
+
+/** Cherry Cola — near-black with oxblood, deep cherry, and warm rose. */
+const CHERRY_TOKENS: ProfileTokens = {
+  "--pf-bg": "#0C0608",
+  "--pf-surface-1": "#140A0D",
+  "--pf-surface-2": "#1C0E12",
+  "--pf-surface-3": "#261317",
+  "--pf-text-strong": "#FDEEEE",
+  "--pf-text": "#F0D8D8",
+  "--pf-text-muted": "#C09898",
+  "--pf-text-faint": "#8A6565",
+  "--pf-border": "rgba(228,150,150,0.12)",
+  "--pf-border-strong": "rgba(228,150,150,0.22)",
+  "--pf-accent": "#E4969A",
+  "--pf-accent-strong": "#D26A70",
+  "--pf-accent-fg": "#1A0709",
+  "--pf-accent-soft": "rgba(228,150,150,0.16)",
+  "--pf-hover": "rgba(228,150,150,0.12)",
+  "--pf-focus-ring": "rgba(228,150,150,0.58)",
+  "--pf-rating": "#F0A8AB",
+  "--pf-rating-bg": "rgba(228,150,150,0.14)",
+  "--pf-rating-border": "rgba(228,150,150,0.34)",
+  "--pf-rating-solid": "#221014",
+  "--pf-rating-border-strong": "#78373D",
+  "--pf-tag-bg": "rgba(228,150,150,0.09)",
+  "--pf-tag-text": "#EFCFCE",
+  "--pf-tag-border": "rgba(228,150,150,0.22)",
+  "--pf-meta": "#97706F",
+  "--pf-overlay-from": "rgba(12,6,8,0.94)",
+  "--pf-overlay-via": "rgba(12,6,8,0.58)",
+};
+
+/** Silver Screen — monochrome charcoal, silver accents, editorial contrast. */
+const SILVER_TOKENS: ProfileTokens = {
+  "--pf-bg": "#0A0A0A",
+  "--pf-surface-1": "#111111",
+  "--pf-surface-2": "#181818",
+  "--pf-surface-3": "#212121",
+  "--pf-text-strong": "#FAFAFA",
+  "--pf-text": "#E4E4E4",
+  "--pf-text-muted": "#A3A3A3",
+  "--pf-text-faint": "#6E6E6E",
+  "--pf-border": "rgba(255,255,255,0.11)",
+  "--pf-border-strong": "rgba(255,255,255,0.22)",
+  "--pf-accent": "#D4D4D4",
+  "--pf-accent-strong": "#B0B0B0",
+  "--pf-accent-fg": "#0A0A0A",
+  "--pf-accent-soft": "rgba(255,255,255,0.13)",
+  "--pf-hover": "rgba(255,255,255,0.09)",
+  "--pf-focus-ring": "rgba(255,255,255,0.72)",
+  "--pf-rating": "#F0F0F0",
+  "--pf-rating-bg": "rgba(255,255,255,0.12)",
+  "--pf-rating-border": "rgba(255,255,255,0.32)",
+  "--pf-rating-solid": "#1C1C1C",
+  "--pf-rating-border-strong": "#5A5A5A",
+  "--pf-tag-bg": "rgba(255,255,255,0.06)",
+  "--pf-tag-text": "#DCDCDC",
+  "--pf-tag-border": "rgba(255,255,255,0.16)",
+  "--pf-meta": "#7C7C7C",
+  "--pf-overlay-from": "rgba(10,10,10,0.94)",
+  "--pf-overlay-via": "rgba(10,10,10,0.60)",
+};
+
+/** Amber Film — warm near-black, muted amber and sepia. */
+const AMBER_TOKENS: ProfileTokens = {
+  "--pf-bg": "#0D0904",
+  "--pf-surface-1": "#15100A",
+  "--pf-surface-2": "#1D160D",
+  "--pf-surface-3": "#271E12",
+  "--pf-text-strong": "#FBF2E2",
+  "--pf-text": "#EBDDC5",
+  "--pf-text-muted": "#BFAA88",
+  "--pf-text-faint": "#8A795E",
+  "--pf-border": "rgba(226,178,110,0.12)",
+  "--pf-border-strong": "rgba(226,178,110,0.22)",
+  "--pf-accent": "#E2B26E",
+  "--pf-accent-strong": "#C99450",
+  "--pf-accent-fg": "#170F05",
+  "--pf-accent-soft": "rgba(226,178,110,0.16)",
+  "--pf-hover": "rgba(226,178,110,0.11)",
+  "--pf-focus-ring": "rgba(226,178,110,0.58)",
+  "--pf-rating": "#EFC086",
+  "--pf-rating-bg": "rgba(226,178,110,0.14)",
+  "--pf-rating-border": "rgba(226,178,110,0.34)",
+  "--pf-rating-solid": "#1D160C",
+  "--pf-rating-border-strong": "#6E532A",
+  "--pf-tag-bg": "rgba(226,178,110,0.09)",
+  "--pf-tag-text": "#E8D6B4",
+  "--pf-tag-border": "rgba(226,178,110,0.20)",
+  "--pf-meta": "#8F7C5D",
+  "--pf-overlay-from": "rgba(13,9,4,0.94)",
+  "--pf-overlay-via": "rgba(13,9,4,0.58)",
+};
+
+/** Arctic Tide — blue-teal ground with cool ice accents. */
+const ARCTIC_TOKENS: ProfileTokens = {
+  "--pf-bg": "#04090E",
+  "--pf-surface-1": "#081119",
+  "--pf-surface-2": "#0C1922",
+  "--pf-surface-3": "#12232E",
+  "--pf-text-strong": "#EAF6FA",
+  "--pf-text": "#CDE3EC",
+  "--pf-text-muted": "#8CAAB8",
+  "--pf-text-faint": "#5C7884",
+  "--pf-border": "rgba(150,214,232,0.12)",
+  "--pf-border-strong": "rgba(150,214,232,0.22)",
+  "--pf-accent": "#96D6E8",
+  "--pf-accent-strong": "#6BBED4",
+  "--pf-accent-fg": "#04121A",
+  "--pf-accent-soft": "rgba(150,214,232,0.15)",
+  "--pf-hover": "rgba(150,214,232,0.11)",
+  "--pf-focus-ring": "rgba(150,214,232,0.60)",
+  "--pf-rating": "#A8DEEC",
+  "--pf-rating-bg": "rgba(150,214,232,0.14)",
+  "--pf-rating-border": "rgba(150,214,232,0.34)",
+  "--pf-rating-solid": "#0A1A24",
+  "--pf-rating-border-strong": "#2C5A6D",
+  "--pf-tag-bg": "rgba(150,214,232,0.09)",
+  "--pf-tag-text": "#C2DEE9",
+  "--pf-tag-border": "rgba(150,214,232,0.20)",
+  "--pf-meta": "#6B8A97",
+  "--pf-overlay-from": "rgba(4,9,14,0.94)",
+  "--pf-overlay-via": "rgba(4,9,14,0.58)",
+};
+
+/** Soft Sage — a genuine light theme: warm off-white, sage ink, dark text. */
+const SAGE_TOKENS: ProfileTokens = {
+  "--pf-bg": "#F2F4EE",
+  "--pf-surface-1": "#F8FAF5",
+  "--pf-surface-2": "#EAEEE4",
+  "--pf-surface-3": "#DCE2D4",
+  "--pf-text-strong": "#1D241C",
+  "--pf-text": "#2C352A",
+  "--pf-text-muted": "#55604F",
+  "--pf-text-faint": "#7E8A76",
+  "--pf-border": "rgba(29,36,28,0.12)",
+  "--pf-border-strong": "rgba(29,36,28,0.22)",
+  "--pf-accent": "#40684A",
+  "--pf-accent-strong": "#2F5138",
+  "--pf-accent-fg": "#FFFFFF",
+  "--pf-accent-soft": "rgba(64,104,74,0.10)",
+  "--pf-hover": "rgba(64,104,74,0.08)",
+  "--pf-focus-ring": "rgba(64,104,74,0.55)",
+  "--pf-rating": "#2F5138",
+  "--pf-rating-bg": "rgba(64,104,74,0.09)",
+  "--pf-rating-border": "rgba(64,104,74,0.28)",
+  "--pf-rating-solid": "#FFFFFF",
+  "--pf-rating-border-strong": "#5A8464",
+  "--pf-tag-bg": "rgba(29,36,28,0.045)",
+  "--pf-tag-text": "#37422F",
+  "--pf-tag-border": "rgba(29,36,28,0.14)",
+  "--pf-meta": "#6E7A66",
+  "--pf-overlay-from": "rgba(248,250,245,0.94)",
+  "--pf-overlay-via": "rgba(248,250,245,0.62)",
+};
+
 export const PROFILE_TOKENS_BY_THEME: Record<ThemeId, ProfileTokens> = {
   obsidian: OBSIDIAN_TOKENS,
   violet: VIOLET_TOKENS,
   midnight: MIDNIGHT_TOKENS,
   "rose-noir": ROSE_TOKENS,
   paper: PAPER_TOKENS,
+  "forest-dark": FOREST_TOKENS,
+  "cherry-cola": CHERRY_TOKENS,
+  "silver-screen": SILVER_TOKENS,
+  "amber-film": AMBER_TOKENS,
+  "arctic-tide": ARCTIC_TOKENS,
+  "soft-sage": SAGE_TOKENS,
 };
 
 /** True when a theme is a light theme (drives scrollbar + form control colors). */
 export function isLightTheme(theme: ThemeId): boolean {
-  return theme === "paper";
+  return LIGHT_THEMES.includes(theme);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -309,12 +516,88 @@ export const TYPOGRAPHY_PRESETS: Record<TypographyId, TypographyPreset> = {
     displayScale: 0.94,
     displayWeight: 500,
   },
+
+  /* ---- Phase 4.3: five additional voices -------------------------------
+   *
+   * Each one moves at least two of the three roles, so switching presets is
+   * visible in the *computed* font families rather than in a label. Body copy
+   * stays on a legible sans or serif everywhere; monospace is only ever
+   * assigned to metadata (and, in the two typewriter-style presets, to the
+   * display face as well).
+   */
+  contemporary: {
+    id: "contemporary",
+    name: "Contemporary",
+    description:
+      "Space Grotesk headings over Inter body copy — geometric, current, sharp.",
+    display: `var(--font-grotesk), ui-sans-serif, system-ui, sans-serif`,
+    body: `var(--font-sans), ui-sans-serif, system-ui, sans-serif`,
+    meta: `var(--font-sans), ui-sans-serif, system-ui, sans-serif`,
+    displayTracking: "-0.03em",
+    displayScale: 1.02,
+    displayWeight: 600,
+  },
+  "soft-editorial": {
+    id: "soft-editorial",
+    name: "Soft Editorial",
+    description:
+      "Cormorant Garamond headings with DM Sans body — literary and high-contrast.",
+    display: `var(--font-cormorant), ui-serif, Georgia, serif`,
+    body: `var(--font-dm-sans), ui-sans-serif, system-ui, sans-serif`,
+    meta: `var(--font-dm-sans), ui-sans-serif, system-ui, sans-serif`,
+    displayTracking: "-0.005em",
+    displayScale: 1.24,
+    displayWeight: 500,
+  },
+  manrope: {
+    id: "manrope",
+    name: "Manrope",
+    description:
+      "A single geometric sans across headings, body, and metadata. Quiet and unified.",
+    display: `var(--font-manrope), ui-sans-serif, system-ui, sans-serif`,
+    body: `var(--font-manrope), ui-sans-serif, system-ui, sans-serif`,
+    meta: `var(--font-manrope), ui-sans-serif, system-ui, sans-serif`,
+    displayTracking: "-0.028em",
+    displayScale: 1.05,
+    displayWeight: 700,
+  },
+  archive: {
+    id: "archive",
+    name: "Archive",
+    description:
+      "Instrument Serif headings with restrained IBM Plex Mono metadata — a catalogue feel.",
+    display: `var(--font-display), ui-serif, Georgia, serif`,
+    body: `var(--font-sans), ui-sans-serif, system-ui, sans-serif`,
+    meta: `var(--font-plex-mono), ui-monospace, monospace`,
+    displayTracking: "-0.015em",
+    displayScale: 1.14,
+    displayWeight: 400,
+  },
+  playful: {
+    id: "playful",
+    name: "Playful Minimal",
+    description:
+      "Outfit headings with a compact DM Sans body — characterful but restrained.",
+    display: `var(--font-outfit), ui-sans-serif, system-ui, sans-serif`,
+    body: `var(--font-dm-sans), ui-sans-serif, system-ui, sans-serif`,
+    meta: `var(--font-dm-sans), ui-sans-serif, system-ui, sans-serif`,
+    displayTracking: "-0.035em",
+    displayScale: 1.08,
+    displayWeight: 600,
+  },
 };
 
 export const TYPOGRAPHY_LIST: TypographyPreset[] = [
+  /* Phase 3 — preserved. */
   TYPOGRAPHY_PRESETS.serif,
   TYPOGRAPHY_PRESETS.modern,
   TYPOGRAPHY_PRESETS["mono-led"],
+  /* Phase 4.3 — five new voices. */
+  TYPOGRAPHY_PRESETS.contemporary,
+  TYPOGRAPHY_PRESETS["soft-editorial"],
+  TYPOGRAPHY_PRESETS.manrope,
+  TYPOGRAPHY_PRESETS.archive,
+  TYPOGRAPHY_PRESETS.playful,
 ];
 
 /* -------------------------------------------------------------------------- */
@@ -494,11 +777,22 @@ export const PROFILE_SCOPE_CLASS = "profile-scope";
 
 /** Re-exported so consumers can build the theme id list without importing lib/theme. */
 export const THEME_IDS_ALL: ThemeId[] = [
+  /* Phase 3 — preserved. */
   "obsidian",
   "violet",
   "midnight",
   "rose-noir",
   "paper",
+  /* Phase 4.3 — six new palettes. */
+  "forest-dark",
+  "cherry-cola",
+  "silver-screen",
+  "amber-film",
+  "arctic-tide",
+  "soft-sage",
 ];
+
+/** Themes whose body surface is light — used to flip form/scrollbar colours. */
+export const LIGHT_THEMES: ThemeId[] = ["paper", "soft-sage"];
 
 export type { ThemeId, TypographyId, LayoutPreset, BackgroundTreatment, ThemePreset };

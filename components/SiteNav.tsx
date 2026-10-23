@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Wordmark } from "./Wordmark";
 import { Button } from "./Button";
+import { useAccount } from "./auth/AccountProvider";
+import { AccountMenu } from "./auth/AccountMenu";
 
 const navLinks = [
   { href: "#discover", label: "Discover" },
@@ -24,6 +26,18 @@ const navLinks = [
 export function SiteNav() {
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement | null>(null);
+  const { status } = useAccount();
+
+  /*
+   * Phase 5 — a signed-in visitor gets an avatar, not two buttons.
+   *
+   * `status` starts as "loading" (or "unconfigured" with no Supabase project),
+   * and the signed-out CTAs render during that window so the nav never flashes
+   * an empty gap. Once the session resolves to authenticated they are replaced
+   * by the single account menu — one avatar at the far right, no duplicate
+   * controls at either width.
+   */
+  const isAuthenticated = status === "authenticated";
 
   // Lock body scroll when the mobile panel is open.
   useEffect(() => {
@@ -136,16 +150,30 @@ export function SiteNav() {
             </ul>
             <div className="site-nav-divider my-4" />
             <div className="flex flex-col gap-2">
-              <Button href="#signup" variant="secondary" size="md" className="w-full">
-                Sign in
-              </Button>
-              <Button href="#signup" size="md" className="w-full">
-                Create profile
-              </Button>
-              <p className="site-nav-footnote pt-2 text-[12px]">
-                Account flows arrive in a later phase — these buttons show the
-                intended destination.
-              </p>
+              {isAuthenticated ? (
+                <>
+                  <Button href="/studio" variant="secondary" size="md" className="w-full">
+                    Edit profile
+                  </Button>
+                  <Button href="/account" size="md" className="w-full">
+                    Account settings
+                  </Button>
+                  {/*
+                   * The avatar is NOT repeated here. It lives in the header at
+                   * every width — duplicating it inside the mobile panel would
+                   * give a signed-in visitor two account controls on one screen.
+                   */}
+                </>
+              ) : (
+                <>
+                  <Button href="/sign-in" variant="secondary" size="md" className="w-full">
+                    Sign in
+                  </Button>
+                  <Button href="/sign-up" size="md" className="w-full">
+                    Create profile
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         </div>

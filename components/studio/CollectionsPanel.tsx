@@ -2,7 +2,13 @@
 
 import { useState } from "react";
 import { useProfileDraft } from "@/components/ProfileDraftProvider";
-import type { ProfileCollection, ProfileMediaItem } from "@/lib/noirProfile";
+import type { ProfileCollection, ProfileMediaItem, ClicksPhoto } from "@/lib/noirProfile";
+import {
+  COLLECTION_LAYOUT_LABELS,
+  collectionAcceptsMusicLayouts,
+  isMusicLayout,
+  type CollectionLayoutId,
+} from "@/lib/noirProfile";
 import {
   addRecordToCollection,
   allowedKindsForCollection,
@@ -16,14 +22,105 @@ import { IconUp, IconDown, IconTrash, IconPlus, IconX, IconSearch } from "./Stud
 import { MediaPicker } from "./MediaPicker";
 import { ReviewEditor, type ReviewDraft, reviewFromItem, validateReview } from "./ReviewEditor";
 
-const LAYOUT_LABELS = {
-  "poster-grid": "Poster grid",
-  "featured": "Featured",
-  "compact": "Compact",
-} as const;
-
-type LayoutKey = keyof typeof LAYOUT_LABELS;
-type VisibilityKey = "public" | "followers" | "private";
+/**
+ * Mini-preview illustrations for each layout, rendered inline in the studio
+ * selector. They distinguish the layouts without claiming to be a screenshot
+ * — the visitor sees the real component on `/u/noir`, not here.
+ *
+ *   "grid"   = horizontal rail (Poster Grid)
+ *   "wall"   = wrapping 2-column vertical grid (Poster Wall)
+ *   "feat"   = one large artwork with a list beside it (Featured)
+ *   "comps"  = stacked rows with text alignment (Compact)
+ *   "jl"     = vertical lines of artwork + text (Review Journal)
+ *   "st"     = horizontal rows with rounded square thumbs (Soundtrack List)
+ *   "ag"     = wrapping square grid (Album Gallery)
+ */
+function LayoutPreview({ id }: { id: CollectionLayoutId }) {
+  if (id === "poster-grid")
+    return (
+      <svg viewBox="0 0 64 32" className="h-7 w-14" fill="none" aria-hidden>
+        <rect x="2" y="6" width="10" height="18" rx="1" fill="currentColor" opacity="0.55" />
+        <rect x="14" y="6" width="10" height="18" rx="1" fill="currentColor" opacity="0.55" />
+        <rect x="26" y="6" width="10" height="18" rx="1" fill="currentColor" opacity="0.55" />
+        <rect x="38" y="6" width="10" height="18" rx="1" fill="currentColor" opacity="0.55" />
+        <rect x="50" y="6" width="10" height="18" rx="1" fill="currentColor" opacity="0.25" />
+      </svg>
+    );
+  if (id === "poster-wall")
+    return (
+      <svg viewBox="0 0 64 32" className="h-7 w-14" fill="none" aria-hidden>
+        <rect x="2" y="2" width="13" height="14" rx="1" fill="currentColor" opacity="0.55" />
+        <rect x="17" y="2" width="13" height="14" rx="1" fill="currentColor" opacity="0.55" />
+        <rect x="32" y="2" width="13" height="14" rx="1" fill="currentColor" opacity="0.55" />
+        <rect x="47" y="2" width="13" height="14" rx="1" fill="currentColor" opacity="0.55" />
+        <rect x="2" y="18" width="13" height="14" rx="1" fill="currentColor" opacity="0.55" />
+        <rect x="17" y="18" width="13" height="14" rx="1" fill="currentColor" opacity="0.55" />
+        <rect x="32" y="18" width="13" height="14" rx="1" fill="currentColor" opacity="0.55" />
+      </svg>
+    );
+  if (id === "featured")
+    return (
+      <svg viewBox="0 0 64 32" className="h-7 w-14" fill="none" aria-hidden>
+        <rect x="2" y="2" width="26" height="28" rx="1" fill="currentColor" opacity="0.55" />
+        <rect x="32" y="2" width="30" height="6" rx="0.5" fill="currentColor" opacity="0.55" />
+        <rect x="32" y="11" width="30" height="6" rx="0.5" fill="currentColor" opacity="0.35" />
+        <rect x="32" y="20" width="30" height="6" rx="0.5" fill="currentColor" opacity="0.35" />
+      </svg>
+    );
+  if (id === "compact")
+    return (
+      <svg viewBox="0 0 64 32" className="h-7 w-14" fill="none" aria-hidden>
+        <rect x="2" y="4" width="10" height="6" rx="0.5" fill="currentColor" opacity="0.55" />
+        <rect x="14" y="4" width="34" height="6" rx="0.5" fill="currentColor" opacity="0.45" />
+        <rect x="50" y="4" width="12" height="6" rx="0.5" fill="currentColor" opacity="0.6" />
+        <rect x="2" y="13" width="10" height="6" rx="0.5" fill="currentColor" opacity="0.55" />
+        <rect x="14" y="13" width="34" height="6" rx="0.5" fill="currentColor" opacity="0.45" />
+        <rect x="50" y="13" width="12" height="6" rx="0.5" fill="currentColor" opacity="0.6" />
+        <rect x="2" y="22" width="10" height="6" rx="0.5" fill="currentColor" opacity="0.55" />
+        <rect x="14" y="22" width="34" height="6" rx="0.5" fill="currentColor" opacity="0.45" />
+        <rect x="50" y="22" width="12" height="6" rx="0.5" fill="currentColor" opacity="0.6" />
+      </svg>
+    );
+  if (id === "review-journal")
+    return (
+      <svg viewBox="0 0 64 32" className="h-7 w-14" fill="none" aria-hidden>
+        <rect x="2" y="4" width="10" height="6" rx="0.5" fill="currentColor" opacity="0.55" />
+        <rect x="14" y="4" width="48" height="6" rx="0.5" fill="currentColor" opacity="0.55" />
+        <rect x="14" y="12" width="48" height="2" rx="0.5" fill="currentColor" opacity="0.35" />
+        <rect x="2" y="20" width="10" height="6" rx="0.5" fill="currentColor" opacity="0.55" />
+        <rect x="14" y="20" width="48" height="6" rx="0.5" fill="currentColor" opacity="0.55" />
+        <rect x="14" y="28" width="48" height="2" rx="0.5" fill="currentColor" opacity="0.35" />
+      </svg>
+    );
+  if (id === "soundtrack-list")
+    return (
+      <svg viewBox="0 0 64 32" className="h-7 w-14" fill="none" aria-hidden>
+        <rect x="2" y="4" width="8" height="8" rx="1.5" fill="currentColor" opacity="0.55" />
+        <rect x="12" y="4" width="46" height="3" rx="0.5" fill="currentColor" opacity="0.55" />
+        <rect x="12" y="9" width="32" height="3" rx="0.5" fill="currentColor" opacity="0.35" />
+        <rect x="2" y="16" width="8" height="8" rx="1.5" fill="currentColor" opacity="0.55" />
+        <rect x="12" y="16" width="46" height="3" rx="0.5" fill="currentColor" opacity="0.55" />
+        <rect x="12" y="21" width="32" height="3" rx="0.5" fill="currentColor" opacity="0.35" />
+        <rect x="2" y="28" width="8" height="2.5" rx="1" fill="currentColor" opacity="0.4" />
+      </svg>
+    );
+  if (id === "album-gallery")
+    return (
+      <svg viewBox="0 0 64 32" className="h-7 w-14" fill="none" aria-hidden>
+        <rect x="2" y="6" width="8" height="8" rx="2" fill="currentColor" opacity="0.55" />
+        <rect x="12" y="6" width="8" height="8" rx="2" fill="currentColor" opacity="0.55" />
+        <rect x="22" y="6" width="8" height="8" rx="2" fill="currentColor" opacity="0.55" />
+        <rect x="32" y="6" width="8" height="8" rx="2" fill="currentColor" opacity="0.55" />
+        <rect x="42" y="6" width="8" height="8" rx="2" fill="currentColor" opacity="0.55" />
+        <rect x="52" y="6" width="8" height="8" rx="2" fill="currentColor" opacity="0.55" />
+        <rect x="2" y="20" width="8" height="8" rx="2" fill="currentColor" opacity="0.55" />
+        <rect x="12" y="20" width="8" height="8" rx="2" fill="currentColor" opacity="0.55" />
+        <rect x="22" y="20" width="8" height="8" rx="2" fill="currentColor" opacity="0.55" />
+        <rect x="32" y="20" width="8" height="8" rx="2" fill="currentColor" opacity="0.55" />
+      </svg>
+    );
+  return null;
+}
 
 export function CollectionsPanel() {
   const { draft, update } = useProfileDraft();
@@ -326,22 +423,12 @@ function CollectionEditor({
         </FieldGroup>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <FieldGroup id={`f-layout-${collection.id}`} label="Layout">
-            <Select
-              id={`f-layout-${collection.id}`}
-              value={collection.layout}
-              onChange={(e) =>
-                onPatch({ layout: e.target.value as ProfileCollection["layout"] })
-              }
-            >
-              {(
-                Object.entries(LAYOUT_LABELS) as Array<[LayoutKey, string]>
-              ).map(([k, v]) => (
-                <option key={k} value={k}>
-                  {v}
-                </option>
-              ))}
-            </Select>
-          </FieldGroup>
+          <LayoutPicker
+            value={collection.layout}
+            acceptsMusic={collectionAcceptsMusicLayouts(collection)}
+            onChange={(l) => onPatch({ layout: l })}
+          />
+        </FieldGroup>
           <FieldGroup id={`f-vis-${collection.id}`} label="Visibility">
             <Select
               id={`f-vis-${collection.id}`}
@@ -359,7 +446,14 @@ function CollectionEditor({
           </FieldGroup>
         </div>
 
-        <div className="flex items-center justify-between gap-3 rounded-md border border-[var(--line-soft)] bg-[var(--surface-1)] px-3 py-2 text-[12px]">
+        {/*
+          * Phase 4.7 — the trailing "Showing as public" line is gone. It sat
+          * directly beneath a Select already displaying that exact value, so the
+          * word printed twice for no gain, and the checkbox beside it is the
+          * control that actually hides a collection. The Select above is the real
+          * setting and stays; nothing about the stored visibility changes.
+          */}
+        <div className="flex items-center gap-3 rounded-md border border-[var(--line-soft)] bg-[var(--surface-1)] px-3 py-2 text-[12px]">
           <label className="flex items-center gap-2 text-[var(--text-default)]" htmlFor={`f-show-${collection.id}`}>
             <input
               id={`f-show-${collection.id}`}
@@ -372,9 +466,7 @@ function CollectionEditor({
             />
             Show on public profile
           </label>
-          <span className="text-[11px] text-[var(--text-muted)]">
-            Showing as {collection.visibility === "private" ? "private" : `${collection.visibility}`}
-          </span>
+
         </div>
 
         {isNewCollection && (
@@ -503,4 +595,134 @@ function isHidden(id: string) {
   // support without changing the data model now.
   void id;
   return false;
+}
+/* -------------------------------------------------------------------------- */
+/*                                Layout picker                                */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The studio's per-collection layout selector.
+ *
+ * Each option shows a real mini-preview so the seven layouts are
+ * distinguishable before the visitor saves. Music layouts
+ * (`soundtrack-list`, `album-gallery`) are only offered on music-compatible
+ * collections — the rule from the brief. An empty collection always qualifies,
+ * because the owner is about to pick media and music may well be the choice.
+ *
+ * The picker is a real radio group, not a custom widget, so its state is
+ * inspectable, keyboard-navigable, and accessible by default.
+ */
+function LayoutPicker({
+  value,
+  acceptsMusic,
+  onChange,
+}: {
+  value: CollectionLayoutId;
+  acceptsMusic: boolean;
+  onChange: (next: CollectionLayoutId) => void;
+}) {
+  const ALL: CollectionLayoutId[] = [
+    "poster-grid",
+    "poster-wall",
+    "featured",
+    "compact",
+    "review-journal",
+    "soundtrack-list",
+    "album-gallery",
+  ];
+
+  const MUSIC: CollectionLayoutId[] = ["soundtrack-list", "album-gallery"];
+
+  const HINTS: Record<CollectionLayoutId, { one: string; hint: string }> = {
+    "poster-grid": {
+      one: "Horizontal rail",
+      hint: "Existing behaviour — best for browsing large catalogues sideways.",
+    },
+    "poster-wall": {
+      one: "Vertical grid",
+      hint: "Wrapping posters — the page scrolls, the grid never overflows.",
+    },
+    featured: {
+      one: "Hero + list",
+      hint: "One piece plus a small list. Best at six items or fewer.",
+    },
+    compact: {
+      one: "Dense rows",
+      hint: "Highest information density — readable at 360px wide.",
+    },
+    "review-journal": {
+      one: "Editorial rows",
+      hint: "Each entry reads like a journal entry, with the excerpt as the click target.",
+    },
+    "soundtrack-list": {
+      one: "Music rows",
+      hint: "Square artwork with rounded corners. Music collections only.",
+    },
+    "album-gallery": {
+      one: "Square grid",
+      hint: "Wrapping rounded-square gallery. Music collections only.",
+    },
+  };
+
+  return (
+    <div
+      className="grid grid-cols-1 gap-1.5"
+      role="radiogroup"
+      aria-label="Collection layout"
+      data-testid={`studio-collection-layout-${value}`}
+    >
+      {ALL.map((id) => {
+        const musicOnly = MUSIC.includes(id);
+        const disabled = musicOnly && !acceptsMusic;
+        const active = value === id;
+        const meta = HINTS[id];
+        return (
+          <label
+            key={id}
+            className={`flex cursor-pointer items-start gap-3 rounded-md border px-3 py-2.5 transition-colors ${
+              active
+                ? "border-[var(--accent-400)]/60 bg-[var(--accent-400)]/10"
+                : "border-[var(--line-soft)] bg-[var(--surface-2)] hover:border-[var(--line-strong)]"
+            } ${disabled ? "cursor-not-allowed opacity-50" : ""}`}
+            data-testid={`studio-layout-radio-${id}`}
+            data-active={active}
+            data-music-only={musicOnly ? "1" : undefined}
+            data-disabled={disabled ? "1" : undefined}
+          >
+            <input
+              type="radio"
+              name={`f-layout-${id}`}
+              value={id}
+              checked={active}
+              disabled={disabled}
+              onChange={() => !disabled && onChange(id)}
+              className="mt-1 h-3.5 w-3.5 shrink-0 accent-[var(--accent-400)]"
+            />
+            <span
+              aria-hidden
+              className="mt-0.5 inline-flex h-9 w-16 shrink-0 items-center justify-center rounded-md border border-[var(--line-soft)] bg-[var(--accent-400)]/15 text-[var(--accent-400)]"
+            >
+              <LayoutPreview id={id} />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[13px] font-medium text-[var(--text-strong)]">
+                {COLLECTION_LAYOUT_LABELS[id]}
+                {musicOnly && (
+                  <span className="pf-meta ml-2 text-[10px] uppercase tracking-[0.16em] text-[var(--text-muted)]">
+                    Music
+                  </span>
+                )}
+              </span>
+              <span className="mt-0.5 block text-[11px] text-[var(--text-muted)]">{meta.hint}</span>
+              {disabled && (
+                <span className="pf-meta mt-1 block text-[11px] text-[var(--text-faint)]">
+                  Add music to this shelf to unlock this layout.
+                </span>
+              )}
+            </span>
+          </label>
+        );
+      })}
+    </div>
+  );
 }

@@ -31,6 +31,7 @@ import Link from "next/link";
 import { Artwork } from "./Artwork";
 import { RatingBadge } from "./RatingBadge";
 import { hasReview } from "./ReviewExcerptLink";
+import { isSafeExternalUrl } from "@/lib/validate";
 import type { ProfileCollection, ProfileMediaItem } from "@/lib/noirProfile";
 
 /** Word-boundary truncation for a short review excerpt. */
@@ -457,7 +458,7 @@ export function CompactCollection({
   return (
     <ul className="pf-collection pf-compact-list" data-testid="compact-collection">
       {collection.items.map((item, idx) => (
-        <li key={item.id} className="pf-compact-row">
+        <li key={item.id} className="pf-compact-row" data-testid="compact-row">
           {/* Small index gutter, adjacent to the artwork by construction. */}
           <span className="pf-compact-index" aria-hidden>
             {String(idx + 1).padStart(2, "0")}
@@ -507,6 +508,28 @@ export function CompactCollection({
  * then album, with the personal rating on the trailing edge. What it does *not*
  * do is render a player or per-track playback controls -- PRSME never promises
  * audio playback; the optional external link goes to the catalogue page.
+ *
+ * Phase 4.5 -- **the row is the link.**
+ *
+ * Previously the artwork and text sat in an inert `<li>` and a small outlined
+ * square button was parked on the right edge. Two real problems with that:
+ *
+ *   - The square button looked like an administration control, so the shelf read
+ *     as a table of rows with action buttons rather than as someone's music.
+ *   - The obvious target -- the whole row, especially the artwork and title --
+ *     did nothing, so every visit needed a precise tap on a 32px icon.
+ *
+ * Now a row with a usable `externalUrl` renders as one real `<a>`, giving it
+ * native keyboard focus, open-in-new-tab, and a correct accessible name for
+ * free. A row *without* one stays a plain `<li>`: we never render a link that
+ * goes nowhere.
+ *
+ * **Nested interactive elements are avoided by construction.** When the row is
+ * itself an anchor it cannot also contain the `ReviewExcerpt` anchor (an `<a>`
+ * inside an `<a>` is invalid HTML and breaks click handling), so the excerpt is
+ * rendered as plain text in that case. The review itself stays reachable via
+ * the item's own review page for non-linked rows, and non-linked rows keep the
+ * interactive excerpt exactly as before.
  */
 export function SoundtrackListCollection({
   collection,
@@ -520,67 +543,332 @@ export function SoundtrackListCollection({
       className="pf-collection pf-soundtrack-list"
       data-testid="soundtrack-list-collection"
     >
+      {collection.items.map((item) => {
+        // A catalogue URL must be an actual https link, not merely a non-empty
+        // string, before we are willing to turn the whole row into one.
+        const href = isSafeExternalUrl(item.externalUrl) ? item.externalUrl : null;
+
+        const inner = (
+          <>
+            <div className="pf-soundtrack-thumb pf-soundtrack-thumb--rounded" aria-hidden>
+              <Artwork
+                palette={item.palette}
+                src={item.coverUrl}
+                ratio="1/1"
+                label={`${item.title} cover artwork`}
+                alt={`${item.title} cover`}
+              />
+            </div>
+
+            <div className="pf-soundtrack-meta">
+              <h4
+                className="pf-display pf-soundtrack-title pf-clamp-2"
+                title={item.title}
+              >
+                {item.title}
+              </h4>
+              {/*
+               * For a song: artist + album.  For an album: artist (no album
+               * line). A music item's `format` tells us which it is -- Phase
+               * 4.2 sees `kind: "music"` on both, with no album-only flag yet,
+               * so we render `byline` (the artist) on every row. The studio can
+               * refine this when a `format: 'album' | 'song'` is added to
+               * `ProfileMediaItem`.
+               */}
+              {item.byline && (
+                <p className="pf-meta pf-soundtrack-artist" title={item.byline}>
+                  {item.byline}
+                </p>
+              )}
+              {/*
+               * The excerpt is the review's own link. Inside an anchor that is
+               * invalid HTML and would hijack the row's click, so a linked row
+               * shows the words as plain text; a non-linked row keeps the real
+               * review link.
+               */}
+              {href ? (
+                hasReview(item) && (
+                  <p className="pf-meta pf-soundtrack-quote">
+                    &ldquo;{truncate((item.myReview ?? item.myReviewTitle ?? "").trim(), 110)}&rdquo;
+                  </p>
+                )
+              ) : (
+                <ReviewExcerpt item={item} variant="list" maxChars={110} />
+              )}
+            </div>
+
+            {item.myRating !== undefined && (
+              <div className="pf-soundtrack-rating">
+                <RatingBadge value={item.myRating} size="sm" />
+              </div>
+            )}
+          </>
+        );
+
+        if (href) {
+          return (
+            <li key={item.id} className="pf-soundtrack-item">
+              <a
+                href={href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="pf-soundtrack-row pf-soundtrack-row--link"
+                data-testid="soundtrack-row"
+                aria-label={`Open ${item.title} by ${item.byline ?? "the artist"} in its catalogue`}
+              >
+                {inner}
+              </a>
+            </li>
+          );
+        }
+
+        return (
+          <li key={item.id} className="pf-soundtrack-item">
+            <div
+              className="pf-soundtrack-row"
+              data-testid="soundtrack-row"
+              data-linked="false"
+            >
+              {inner}
+            </div>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*                               Poster Wall (new)                             */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Poster Wall -- a wrapping, vertically-scrolling poster grid.
+ *
+ * The important distinction from `PosterGridCollection` is scroll direction.
+ * The shelf is a horizontal rail (`overflow-x`) meant for browsing a large
+ * catalogue sideways; a wall is the opposite: the *page* scrolls and the grid
+ * simply wraps onto as many rows as the items need. That makes it the right
+ * layout for a curated set of twenty films where each one deserves a caption
+ * you can actually read, rather than a rail you flick through.
+ *
+ * Implementation notes that keep the page from overflowing:
+ *   - `repeat(auto-fill, minmax(...))` with a capped `min()`, so mobile gets
+ *     few wide cards and desktop gets more columns.
+ *   - No `overflow-x` anywhere in the component: the wall cannot scroll
+ *     sideways, so it cannot widen the document.
+ *   - Every card is `min-width: 0`, so a long title wraps rather than pushing.
+ */
+export function PosterWallCollection({
+  collection,
+}: {
+  collection: ProfileCollection;
+}) {
+  if (collection.items.length === 0) return <EmptyShelf />;
+
+  return (
+    <div
+      className="pf-poster-wall"
+      data-testid="poster-wall-collection"
+      data-collection-rows="wrap"
+    >
       {collection.items.map((item) => (
-        <li key={item.id} className="pf-soundtrack-row">
-          <div className="pf-soundtrack-thumb" aria-hidden>
+        <article className="pf-wall-card" key={item.id} data-testid="poster-wall-card">
+          <div className="pf-poster-frame">
             <Artwork
               palette={item.palette}
               src={item.coverUrl}
-              ratio="1/1"
+              ratio="auto"
               label={`${item.title} cover artwork`}
               alt={`${item.title} cover`}
+              className="!rounded-none"
+            />
+            {item.myRating !== undefined && (
+              <RatingBadge value={item.myRating} size="sm" className="pf-poster-rating" />
+            )}
+          </div>
+          <div className="mt-2 min-w-0">
+            <h3
+              className="pf-display pf-clamp-2 text-[0.9375rem] leading-snug text-[var(--pf-text-strong)]"
+              title={item.title}
+            >
+              {item.title}
+            </h3>
+            <Byline item={item} />
+            {/* The excerpt is the link to the full review, same as everywhere. */}
+            <ReviewExcerpt item={item} variant="poster" maxChars={84} />
+          </div>
+        </article>
+      ))}
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*                             Review Journal (new)                            */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Review Journal -- for shelves where the owner's opinion is the content.
+ *
+ * The composition is deliberately *not* a table and *not* a poster grid. Each
+ * entry is an editorial row: a fixed-size artwork on the left on desktop, the
+ * title and creator beside it, the rating on the trailing edge, and the review
+ * excerpt as the click target. On mobile the artwork shrinks rather than
+ * disappearing, so the entry still reads as "a thing I reviewed" rather than
+ * "a line of text".
+ *
+ * An entry with no review renders *without* an excerpt and without pretending
+ * there is one -- `ReviewExcerpt` returns null, so the row collapses to
+ * title / creator / rating. We never substitute external scores or invent
+ * review text.
+ */
+export function ReviewJournalCollection({
+  collection,
+}: {
+  collection: ProfileCollection;
+}) {
+  if (collection.items.length === 0) return <EmptyShelf />;
+
+  return (
+    <ul className="pf-journal" data-testid="review-journal-collection">
+      {collection.items.map((item) => (
+        <li className="pf-journal-entry" key={item.id} data-testid="journal-entry">
+          <div className="pf-journal-art" aria-hidden>
+            <Artwork
+              palette={item.palette}
+              src={item.coverUrl}
+              ratio="auto"
+              label={`${item.title} cover artwork`}
+              alt={`${item.title} cover`}
+              className="!rounded-none"
             />
           </div>
 
-          <div className="pf-soundtrack-meta">
-            <div className="flex items-start justify-between gap-3">
+          <div className="pf-journal-body">
+            <div className="pf-journal-head">
               <h4
-                className="pf-display pf-clamp-2 min-w-0 flex-1 text-[1rem] leading-snug text-[var(--pf-text-strong)]"
+                className="pf-display pf-clamp-2 min-w-0 text-[1.0625rem] leading-snug text-[var(--pf-text-strong)]"
                 title={item.title}
               >
                 {item.title}
               </h4>
               {item.myRating !== undefined && (
-                <RatingBadge value={item.myRating} size="sm" className="shrink-0" />
+                <RatingBadge value={item.myRating} size="md" className="shrink-0" />
               )}
             </div>
-            {/* `byline` is the artist for a music item. */}
-            {item.byline && (
-              <p className="pf-meta line-clamp-1 mt-0.5 text-[12px] text-[var(--pf-text-muted)]">
-                {item.byline}
-              </p>
-            )}
-            <ReviewExcerpt item={item} variant="list" maxChars={110} />
+            <Byline item={item} />
+            {/*
+              `variant="list"` renders the excerpt as a real anchor. The whole
+              entry is NOT a link, so the surrounding article stays selectable
+              text and the only click target is the review itself.
+            */}
+            <ReviewExcerpt item={item} variant="list" maxChars={220} />
           </div>
-
-          {item.externalUrl && (
-            <a
-              href={item.externalUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="pf-soundtrack-link"
-              aria-label={`Open ${item.title} in its catalogue`}
-              title="View in the source catalogue"
-            >
-              <svg
-                viewBox="0 0 24 24"
-                className="h-4 w-4"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.7"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden
-              >
-                <path d="M14 4h6v6" />
-                <path d="M20 4l-9 9" />
-                <path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" />
-              </svg>
-            </a>
-          )}
         </li>
       ))}
     </ul>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*                             Album Gallery (new)                             */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Album Gallery -- the visual music layout.
+ *
+ * Square, softly-rounded covers in a wrapping grid that scrolls with the page.
+ * This is intentionally *not* `PosterWallCollection` with narrower cards: the
+ * corner radius, the 1:1 frame, the artist-under-title stacking, and the
+ * larger minimum cover are what make it read as a music collection instead of
+ * a film shelf. Columns are capped so a 1440px screen does not produce eight
+ * postage-stamp covers.
+ *
+ * Phase 4.4 -- the card IS the button.
+ *
+ * Previously the cover was a dead `<article>` and a small external-link glyph
+ * sat on its own line underneath. That was the "button below" that looked wrong:
+ * a lone icon below an album cover reads as debris rather than as an
+ * affordance, and the biggest, most obvious target (the artwork) did nothing
+ * when clicked. Now:
+ *
+ *   - With an `externalUrl`, the whole card renders as one anchor — real
+ *     `href`, `target`, and `rel`, so keyboard focus, open-in-new-tab, and
+ *     screen-reader link semantics all come for free.
+ *   - Without one, it stays a plain `<article>` rather than a link that goes
+ *     nowhere. We never render a clickable card for an item with no
+ *     destination.
+ *
+ * The lift/scale/border animation lives in CSS on `.pf-album-card`, so it
+ * also fires for keyboard focus (`:focus-visible`) and not for pointer hover
+ * alone.
+ */
+export function AlbumGalleryCollection({
+  collection,
+}: {
+  collection: ProfileCollection;
+}) {
+  if (collection.items.length === 0) return <EmptyShelf />;
+
+  return (
+    <div className="pf-album-gallery" data-testid="album-gallery-collection">
+      {collection.items.map((item) => {
+        const href = item.externalUrl;
+        const inner = (
+          <>
+            <div className="pf-album-frame">
+              <Artwork
+                palette={item.palette}
+                src={item.coverUrl}
+                ratio="auto"
+                label={`${item.title} cover artwork`}
+                alt={`${item.title} cover`}
+                className="!rounded-none"
+              />
+              {item.myRating !== undefined && (
+                <RatingBadge value={item.myRating} size="sm" className="pf-poster-rating" />
+              )}
+            </div>
+            <div className="mt-2 min-w-0">
+              <h3
+                className="pf-display pf-album-title pf-clamp-2 text-[0.9375rem] leading-snug"
+                title={item.title}
+              >
+                {item.title}
+              </h3>
+              {item.byline && (
+                <p className="pf-meta mt-0.5 line-clamp-1 text-[12px] text-[var(--pf-text-muted)]">
+                  {item.byline}
+                </p>
+              )}
+            </div>
+          </>
+        );
+
+        if (href) {
+          return (
+            <a
+              key={item.id}
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="pf-album-card group"
+              data-testid="album-card"
+              aria-label={`Open ${item.title} in its catalogue`}
+            >
+              {inner}
+            </a>
+          );
+        }
+
+        return (
+          <article key={item.id} className="pf-album-card" data-testid="album-card">
+            {inner}
+          </article>
+        );
+      })}
+    </div>
   );
 }
 
@@ -598,8 +886,14 @@ export function CollectionBlock({
       return <FeaturedCollection collection={collection} />;
     case "compact":
       return <CompactCollection collection={collection} />;
+    case "poster-wall":
+      return <PosterWallCollection collection={collection} />;
+    case "review-journal":
+      return <ReviewJournalCollection collection={collection} />;
     case "soundtrack-list":
       return <SoundtrackListCollection collection={collection} />;
+    case "album-gallery":
+      return <AlbumGalleryCollection collection={collection} />;
     case "poster-grid":
     default:
       return <PosterGridCollection collection={collection} />;

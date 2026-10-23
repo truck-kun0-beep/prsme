@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
+    "build:retry": "node scripts/build-retry.mjs",
     "test:phase24": "node scripts/phase24-test.mjs",
     "test:phase24:regression": "node scripts/phase24-regression.mjs",
     "test:phase25": "node scripts/phase25-test.mjs",
@@ -15,6 +16,16 @@
     "test:phase3:studio": "node scripts/phase3-studio-drive.mjs",
     "test:phase31": "node scripts/phase31-suite.mjs",
     "test:phase4": "node scripts/phase4-suite.mjs",
+    "test:phase43": "node scripts/phase43-suite.mjs",
+    "test:phase44": "node scripts/phase44-verify.mjs",
+    "test:phase45": "node scripts/phase45-qa.mjs",
+    "test:phase45:studio": "node scripts/phase45-studio-links.mjs",
+    "test:phase45:theme": "node scripts/phase45-theme-audio.mjs",
+    "test:phase45:glyph": "node scripts/phase45-glyph.mjs",
+    "test:phase46": "node scripts/phase46-qa.mjs",
+    "test:phase46:soundtrack": "node scripts/phase46-soundtrack.mjs",
+    "test:phase47": "node scripts/phase47-verify.mjs",
+    "test:phase5": "node scripts/phase5-verify.mjs",
     "test:phase41": "node scripts/phase41-api-check.mjs",
     "test:phase41:browser": "node scripts/phase41-browser-checks.mjs",
     "capture:phase4": "node scripts/capture-phase4.mjs",
@@ -23,6 +34,8 @@
     "verify:phase41:soundtrack": "node scripts/verify-soundtrack-metadata.mjs"
   },
   "dependencies": {
+    "@supabase/ssr": "^0.12.7",
+    "@supabase/supabase-js": "^2.118.0",
     "next": "15.1.6",
     "react": "19.0.0",
     "react-dom": "19.0.0"

@@ -9,6 +9,7 @@
 
 import type { ProfileOwner, ProfileCollection, ProfileMediaItem } from "./noirProfile";
 import type { ProfileDraft, SectionId } from "./profileDraft";
+import { isSafeExternalUrl } from "./validate";
 
 interface EffectiveOwnerOptions {
   /**
@@ -52,7 +53,50 @@ export function buildEffectiveOwner(
     socials: draft.socials.filter((s) => (s.url ?? "").trim().length > 0),
     collections: orderCollections(collections),
     recent: defaults.recent,
-    clicks: defaults.clicks,
+    /*
+     * Phase 4.3 — My Clicks flows through the draft, including when it is empty.
+     *
+     * The demo gallery is a *first-visit* fallback applied once, at read time:
+     * `readDraft` → `readClicks` substitutes `defaults.clicks` only when the
+     * stored value is not an array (i.e. a draft written before Phase 4.3 had
+     * no `clicks` key at all). By the time a draft reaches here `clicks` is
+     * always an array, so an empty one is a real, honoured decision.
+     *
+     * Falling back to `defaults.clicks` on `length === 0` — as this branch
+     * previously did — made the empty state unreachable: an owner who removed
+     * every entry got the demo's eight photographs back on the next render,
+     * with no way to ever show the "add your first click" explanation.
+     */
+    clicks: draft.clicks,
+    /*
+     * Phase 4.5 — Custom Link Buttons follow the same contract as `clicks`:
+     * the stored array is authoritative, and only entries that are actually
+     * renderable survive. A button missing a label or carrying a non-https URL
+     * is dropped here rather than being filtered at the point of render, so the
+     * public section can never emit an empty button.
+     *
+     * Phase 4.6 keeps that filter, so an invalid button never reaches the
+     * section, and adds nothing: the presentation fields are already validated
+     * by `readCustomLinks` on the way out of storage and are re-checked here
+     * only in the sense that a shape/style/layout value is passed through
+     * untouched. `ProfileCustomLinks` owns the defaults.
+     */
+    customLinks: draft.customLinks.filter(
+      (l) =>
+        Boolean(l.label.trim()) &&
+        Boolean(isSafeExternalUrl(l.url)) &&
+        l.url.startsWith("https://"),
+    ),
+    /*
+     * Phase 4.7 — section copy is passed through, not rebuilt.
+     *
+     * `readDraft` has already repaired it: a pre-4.7 draft has been filled with
+     * the defaults, a malformed field has been replaced, and a blank field has
+     * been preserved as a deliberate "hide this line". Re-deriving anything here
+     * would undo that distinction — above all, treating an empty string as
+     * "missing" would resurrect a heading the owner had deliberately removed.
+     */
+    customLinksSection: { ...draft.customLinksSection },
     soundtrack: draft.soundtrack && draft.soundtrack.trackUrl ? draft.soundtrack : undefined,
   };
 
@@ -117,18 +161,27 @@ export function buildDemoCollectionLookup(owner: ProfileOwner): DemoCollectionCo
 }
 
 /**
- * Materialize collections for display: take the draft's order/visibility/
- * layout/description, and merge the draft's items with the demo's.
+ * Materialize collections for display: take the draft's order / visibility /
+ * layout / description, and resolve each shelf's *item list*.
  *
- * Phase 4 rule (this replaced the old "demo always wins" behaviour):
- *   - Demo items come first, in their demo order.
- *   - Draft items that are NOT already in the demo shelf are appended.
- *   - A draft item whose id matches a demo item replaces it in place, so
- *     editing a demo item's review is visible without reordering the shelf.
+ * The item list is owned by the draft. `removedItemIds` is applied against the
+ * demo shelf only so a draft written before Phase 4 — which stored
+ * `items: []` but kept `removedItemIds` — still renders the right shelf, and
+ * so an item the owner deleted stays deleted.
  *
- * This is why adding one TV show does not wipe the five demo posters, and why
- * a draft written before Phase 4 (which stores `items: []`) still renders the
- * full demo shelves.
+ * The merge this function used to perform — "demo items first, draft items not
+ * already present appended" — was wrong in a way that got worse as the layout
+ * library grew:
+ *
+ *   - It made removal impossible. Deleting a poster from a shelf could never
+ *     take effect, because the demo copy was re-merged on the very next render.
+ *   - It made the shelf's contents a function of history rather than of the
+ *     owner. A shelf authored with four films rendered ten, the extra six
+ *     inherited from the demo data it was supposed to have replaced.
+ *
+ * The demo shelf is still reachable in exactly one case: a draft that names no
+ * items at all *and* carries no removals is treated as pre-Phase-4 and falls
+ * back to the pristine demo content. Everything else is the owner's truth.
  */
 export function materializeCollections(
   draft: ProfileDraft,
@@ -139,27 +192,19 @@ export function materializeCollections(
     .map<ProfileCollection>((c) => {
       const original = demoLookup.byId[c.id];
       const removed = new Set(c.removedItemIds ?? []);
-      const demoItems: ProfileMediaItem[] = original
-        ? original.items.filter((i) => !removed.has(i.id))
-        : [];
 
-      // Index the surviving demo items by id so a draft edit can replace in
-      // place without moving the item to the end of the shelf.
-      const merged: ProfileMediaItem[] = demoItems.map((i) => ({ ...i }));
-      const indexById = new Map(merged.map((i, idx) => [i.id, idx]));
-
-      for (const item of c.items) {
-        const existing = indexById.get(item.id);
-        if (existing !== undefined) {
-          merged[existing] = { ...merged[existing], ...item };
-        } else {
-          merged.push({ ...item });
-        }
-      }
+      // Pre-Phase-4 draft: no items and no recorded removals means "I never
+      // touched this shelf", so the demo content stands in for it.
+      const isUntouchedDraft = c.items.length === 0 && removed.size === 0;
+      const baseItems = isUntouchedDraft
+        ? (original?.items ?? [])
+        : c.items;
 
       return {
         ...c,
-        items: merged,
+        items: baseItems
+          .filter((i) => !removed.has(i.id))
+          .map((i) => ({ ...i })),
         description: c.description ?? original?.description,
       };
     });

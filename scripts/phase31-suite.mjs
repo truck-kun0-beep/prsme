@@ -170,15 +170,25 @@ try {
     await evalJs(`document.querySelector('[data-testid="studio-tab-collections"]')?.click();`);
     await new Promise((r) => setTimeout(r, 500));
 
-    // Use the native setter so React's synthetic onChange actually fires.
+    /*
+     * Drive the CURRENT layout control.
+     *
+     * CollectionsPanel used to expose a `<select id="f-layout-<collectionId>">`.
+     * `LayoutPicker` replaced that with a radio group whose inputs are named
+     * `f-layout-<layoutId>`, so the old selector silently matched nothing and
+     * every T5 case failed on an unrelated UI change. Scope by the picker
+     * wrapper and click the radio; a real `.click()` is what React's onChange
+     * listens for, so no native value setter is needed.
+     */
     const changed = await evalJs(`
       return (() => {
-        const sel = document.querySelector('select[id="f-layout-col-films"]');
-        if (!sel) return { ok: false, reason: 'no select' };
-        const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value').set;
-        setter.call(sel, '${layout}');
-        sel.dispatchEvent(new Event('change', { bubbles: true }));
-        return { ok: true, value: sel.value };
+        const group = document.querySelector('[role="radiogroup"][aria-label="Collection layout"]');
+        if (!group) return { ok: false, reason: 'no layout picker' };
+        const input = group.querySelector('input[value="${layout}"]');
+        if (!input) return { ok: false, reason: 'layout not offered' };
+        if (input.disabled) return { ok: false, reason: 'layout disabled' };
+        input.click();
+        return { ok: true, value: input.value, checked: input.checked };
       })();
     `);
     await new Promise((r) => setTimeout(r, 900));

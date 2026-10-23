@@ -1,160 +1,86 @@
 "use client";
 
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
-import {
-  buildDefaultDraft,
-  loadDraft,
-  saveDraft,
-  clearStoredDraft,
-  readDraft,
-  PROFILE_DRAFT_KEY,
-  type ProfileDraft,
-} from "@/lib/profileDraft";
+/**
+ * Backwards-compatible access to the Studio's draft.
+ *
+ * Phase 5 introduced a second persistence backend (Supabase) alongside the
+ * original localStorage one, and the selection logic between them lives in
+ * `ProfileStoreProvider`. Every Studio panel already imported
+ * `useProfileDraft` from THIS module, and each one only ever needed "the draft,
+ * a way to patch it, and a save button that reports state".
+ *
+ * Rather than rewrite ten panels to consume the new context, this hook is a
+ * narrow adapter over it. The surface it exposes is unchanged, so panel code is
+ * untouched, and the backend swap is confined to one file.
+ *
+ * Two intentional differences from the pre-Phase-5 hook:
+ *
+ *   - `save()` is now async (a database round-trip is possible), so a caller
+ *     that assumed a synchronous result must await it. The only such caller is
+ *     the Studio's save button.
+ *   - `defaults` is derived per-call rather than held, because an account's
+ *     "defaults" depend on whether it is guest or not.
+ */
 
-type SaveOutcome = { ok: true; savedAt: number } | { ok: false; error: string };
+import { useMemo, type ReactNode } from "react";
+import {
+  useProfileStore,
+  type SaveOutcome,
+} from "@/components/studio/ProfileStoreProvider";
+import { buildDefaultDraft, type ProfileDraft } from "@/lib/profileDraft";
 
-interface ProfileDraftContextValue {
+export interface ProfileDraftContextValue {
   draft: ProfileDraft;
   defaults: ProfileDraft;
   hydrated: boolean;
-  /** True when the in-memory draft differs from the persisted draft (or there is no persisted draft yet). */
   dirty: boolean;
   lastSavedAt: number | null;
   lastError: string | null;
-  /** Imperative partial updates — shallow-merged into the draft. */
   update: (patch: Partial<ProfileDraft>) => void;
-  /** Imperative deep updates through a producer. */
   updateWith: (producer: (current: ProfileDraft) => ProfileDraft) => void;
-  /** Reset in-memory + storage back to the demo defaults. */
   reset: () => void;
-  /** Persist the current draft to localStorage. */
-  save: () => SaveOutcome;
-}
-
-const ProfileDraftContext = createContext<ProfileDraftContextValue | null>(null);
-
-export function ProfileDraftProvider({ children }: { children: ReactNode }) {
-  const [draft, setDraft] = useState<ProfileDraft>(() => buildDefaultDraft());
-  const [defaults] = useState<ProfileDraft>(() => buildDefaultDraft());
-  const [hydrated, setHydrated] = useState(false);
-  const [dirty, setDirty] = useState(false);
-  const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
-  const [lastError, setLastError] = useState<string | null>(null);
-  const lastPersistedRef = useRef<string | null>(null);
-
-  // Hydrate from localStorage on mount. The default in-memory draft mirrors
-  // the demo so SSR is consistent; we replace it after hydration.
-  useEffect(() => {
-    const stored = loadDraft();
-    if (stored) {
-      setDraft(stored);
-      lastPersistedRef.current = JSON.stringify(stored);
-      setLastSavedAt(Date.now());
-    }
-    setHydrated(true);
-  }, []);
-
-  // Cross-tab sync: if another tab saves, pick it up.
-  useEffect(() => {
-    function onStorage(e: StorageEvent) {
-      if (e.key !== PROFILE_DRAFT_KEY || !e.newValue) return;
-      try {
-        const parsed = JSON.parse(e.newValue);
-        const fresh = readDraft(parsed);
-        setDraft(fresh);
-        lastPersistedRef.current = e.newValue;
-        setLastSavedAt(Date.now());
-        setDirty(false);
-      } catch {
-        /* ignore */
-      }
-    }
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, []);
-
-  const update = useCallback((patch: Partial<ProfileDraft>) => {
-    setDraft((cur) => ({ ...cur, ...patch }));
-    setDirty(true);
-    setLastError(null);
-  }, []);
-
-  const updateWith = useCallback((producer: (current: ProfileDraft) => ProfileDraft) => {
-    setDraft((cur) => producer(cur));
-    setDirty(true);
-    setLastError(null);
-  }, []);
-
-  const reset = useCallback(() => {
-    const fresh = buildDefaultDraft();
-    setDraft(fresh);
-    setDirty(false);
-    setLastError(null);
-    clearStoredDraft();
-    lastPersistedRef.current = JSON.stringify(fresh);
-    // Notify other tabs.
-    try {
-      window.dispatchEvent(
-        new StorageEvent("storage", {
-          key: PROFILE_DRAFT_KEY,
-          newValue: JSON.stringify(fresh),
-        }),
-      );
-    } catch {
-      /* non-fatal */
-    }
-  }, []);
-
-  const save = useCallback((): SaveOutcome => {
-    const result = saveDraft(draft);
-    if (result.ok) {
-      lastPersistedRef.current = JSON.stringify(draft);
-      const now = Date.now();
-      setLastSavedAt(now);
-      setDirty(false);
-      setLastError(null);
-      return { ok: true, savedAt: now };
-    }
-    setLastError(result.error ?? "Could not save.");
-    return { ok: false, error: result.error ?? "Could not save." };
-  }, [draft]);
-
-  const value = useMemo<ProfileDraftContextValue>(
-    () => ({
-      draft,
-      defaults,
-      hydrated,
-      dirty,
-      lastSavedAt,
-      lastError,
-      update,
-      updateWith,
-      reset,
-      save,
-    }),
-    [draft, defaults, hydrated, dirty, lastSavedAt, lastError, update, updateWith, reset, save],
-  );
-
-  return (
-    <ProfileDraftContext.Provider value={value}>
-      {children}
-    </ProfileDraftContext.Provider>
-  );
+  save: () => Promise<SaveOutcome>;
 }
 
 export function useProfileDraft(): ProfileDraftContextValue {
-  const ctx = useContext(ProfileDraftContext);
-  if (!ctx) {
-    throw new Error("useProfileDraft must be used inside <ProfileDraftProvider>");
-  }
-  return ctx;
+  const store = useProfileStore();
+
+  const defaults = useMemo(
+    () => buildDefaultDraft({ includeDemoClicks: false }),
+    [],
+  );
+
+  return {
+    draft: store.draft,
+    defaults,
+    hydrated: store.hydrated,
+    dirty: store.dirty,
+    lastSavedAt: store.lastSavedAt,
+    lastError: store.lastError,
+    update: store.update,
+    updateWith: store.updateWith,
+    reset: store.reset,
+    save: store.save,
+  };
 }
+
+/**
+ * Compatibility wrapper.
+ *
+ * The draft and its provider now live in `ProfileStoreProvider` (Phase 5,
+ * because the Studio gained a second persistence backend). This component is
+ * kept so the existing nesting in `StudioClient` — and any other caller —
+ * keeps working unchanged.
+ *
+ * It renders children and nothing else: all state belongs to the store above
+ * it, and nesting two providers over the same draft would give the two halves
+ * of the Studio disagreeing about what is saved.
+ */
+export function ProfileDraftProvider({
+  children,
+}: {
+  children: ReactNode;
+}) {
+  return <>{children}</>;
+}
+export type { SaveOutcome };

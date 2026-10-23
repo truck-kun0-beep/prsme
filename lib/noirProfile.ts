@@ -46,12 +46,26 @@ export function profileKindFor(
  */
 export type BookFormat = "standard" | "light-novel";
 
-/** Layout identifiers accepted by every collection renderer. */
+/**
+ * Layout identifiers accepted by every collection renderer.
+ *
+ * Phase 4.3 adds three general layouts (`poster-wall`, `review-journal`) and
+ * one music layout (`album-gallery`) alongside the four that shipped earlier.
+ * `soundtrack-list` and `album-gallery` are *music* layouts; they render
+ * square, softly rounded artwork and read badly against 2:3 posters, so the
+ * studio only offers them for music-compatible collections (see
+ * `isMusicLayout` / `collectionAcceptsMusicLayouts`).
+ */
 export type CollectionLayoutId =
+  /* Established layouts — preserved exactly. */
   | "poster-grid"
   | "featured"
   | "compact"
-  | "soundtrack-list";
+  | "soundtrack-list"
+  /* Phase 4.3 additions. */
+  | "poster-wall"
+  | "review-journal"
+  | "album-gallery";
 
 /** Human-readable layout names for the studio selector. */
 export const COLLECTION_LAYOUT_LABELS: Record<CollectionLayoutId, string> = {
@@ -59,7 +73,42 @@ export const COLLECTION_LAYOUT_LABELS: Record<CollectionLayoutId, string> = {
   featured: "Featured",
   compact: "Compact",
   "soundtrack-list": "Soundtrack list",
+  "poster-wall": "Poster Wall",
+  "review-journal": "Review Journal",
+  "album-gallery": "Album Gallery",
 };
+
+/**
+ * Layouts that treat artwork as square and are only meaningful for music.
+ *
+ * A movie poster forced into a rounded square reads as a mistake, so these are
+ * offered exclusively on music collections. Every layout remains *renderable*
+ * for any collection — a draft saved with `album-gallery` on a film shelf
+ * still renders (and still renders honestly) rather than throwing.
+ */
+export const MUSIC_LAYOUT_IDS: CollectionLayoutId[] = [
+  "soundtrack-list",
+  "album-gallery",
+];
+
+export function isMusicLayout(layout: CollectionLayoutId): boolean {
+  return MUSIC_LAYOUT_IDS.includes(layout);
+}
+
+/**
+ * Phase 4.3 — can this collection carry music layouts?
+ *
+ * A collection qualifies when every item on it is music, or when it is still
+ * empty (the owner is about to pick media and may well choose albums). A shelf
+ * that already holds films or books does not qualify: offering Square Artwork
+ * there would be a suggestion PRSME cannot honour.
+ */
+export function collectionAcceptsMusicLayouts(
+  collection: Pick<ProfileCollection, "items">,
+): boolean {
+  if (collection.items.length === 0) return true;
+  return collection.items.every((i) => i.kind === "music");
+}
 
 export interface SocialLink {
   platform: "facebook" | "instagram" | "snapchat" | "linkedin";
@@ -144,6 +193,118 @@ export interface ProfileCollection {
   removedItemIds?: string[];
 }
 
+/**
+ * A Custom Link Button (Phase 4.5).
+ *
+ * An owner-defined outbound button on the public profile — portfolio, shop,
+ * channel, event, anything they want to promote. Deliberately minimal: a
+ * visible label and a destination. That separation is the point:
+ *
+ *   - `label` is what the visitor reads. It is the ONLY text rendered.
+ *   - `url` is where the button goes. It is never displayed as body text or as
+ *     decorative metadata, so a long tracking query string cannot leak into the
+ *     design.
+ *
+ * `id` is stable and is never an array index: reordering must not rewrite an
+ * entry's identity, and the React key has to survive a move.
+ */
+export interface CustomLinkButton {
+  id: string;
+  /** Visible button text. Non-empty, clamped, and owner-supplied. */
+  label: string;
+  /** Destination. Must pass `isSafeExternalUrl` before it is ever stored. */
+  url: string;
+  /** Phase 4.6 — corner treatment. Default `rounded`. */
+  shape?: CustomLinkShape;
+  /** Phase 4.6 — fill treatment. Default `solid`. */
+  style?: CustomLinkStyle;
+  /** Phase 4.6 — `"theme"` follows the profile accent; `"custom"` uses `accent`. */
+  colourMode?: CustomLinkColourMode;
+  /** Phase 4.6 — owner accent (hex), used only when `colourMode` is `"custom"`. */
+  accent?: string;
+  /** Phase 4.6 — row arrangement. Default `stack` (full width, one per row). */
+  layout?: CustomLinkLayout;
+}
+
+/**
+ * Phase 4.7 — the Custom Links *section* copy, as profile data.
+ *
+ * Until this type existed the eyebrow ("Elsewhere"), the heading ("Where to find
+ * Noir."), and the description ("Other work, other rooms, other ways in.") were
+ * hardcoded inside the public profile renderer, so an owner could name their
+ * buttons but could never introduce them.
+ *
+ * The shape is deliberately separate from `CustomLinkButton[]`:
+ *
+ *   - The buttons are a *list* — many records, each with its own id, label, url,
+ *     and order. Copy belongs to the section, not to any one button, and storing
+ *     it on every record would mean three edits for one change and no way to say
+ *     "no heading".
+ *   - Each field is optional-by-omission. An empty string means "do not render
+ *     this element", which is different from "render an empty one". The renderer
+ *     drops the element *and its spacing*; the buttons stay visible.
+ *
+ * The heading is *never* derived from the display name. "Where to find Noir." is
+ * only the demo's default copy — the owner types whatever they want, including a
+ * heading that has nothing to do with their PRSME display name.
+ */
+export interface CustomLinksSection {
+  /** Short intro label above the heading. Optional. */
+  eyebrow?: string;
+  /** The section heading. Optional, and entirely owner-authored. */
+  heading?: string;
+  /** Supporting sentence under the heading. Optional. */
+  description?: string;
+}
+
+/**
+ * The default section copy.
+ *
+ * These are the three strings that were hardcoded in the renderer before Phase
+ * 4.7, kept verbatim so every profile that never customised the section renders
+ * exactly what it did before. They live here rather than in the component so the
+ * draft reader, the studio editor, and the renderer cannot disagree about what
+ * "reset to defaults" means.
+ */
+export const DEFAULT_CUSTOM_LINKS_SECTION: Required<CustomLinksSection> = {
+  eyebrow: "Elsewhere",
+  heading: "Where to find Noir.",
+  description: "Other work, other rooms, other ways in.",
+};
+
+/**
+ * Phase 4.6 — corner treatment.
+ *
+ * `rounded` is a deliberate default rather than a pill. A pill at a 56px height
+ * is a stadium, and a screen of stadiums reads as a traffic-light display rather
+ * than an editorial link list. Pill stays available for owners who want it.
+ */
+export type CustomLinkShape = "rounded" | "rect" | "pill";
+
+/** Fill treatment. `solid` is the default because it is the most legible. */
+export type CustomLinkStyle = "solid" | "outline" | "tint";
+
+/**
+ * Colour source.
+ *
+ * `theme` (default) keeps the buttons inside the profile's palette with no extra
+ * wiring — a saved theme change recolours them for free. `custom` hands the
+ * accent family to `accent`, which is what the "custom button colour" option
+ * sets.
+ */
+export type CustomLinkColourMode = "theme" | "custom";
+
+/**
+ * Row arrangement.
+ *
+ * `stack` (default) is the full-width single column the brief asks for. `grid`
+ * is offered for the case where it genuinely fits — short labels, several of
+ * them, and room to spare. A grid that forces a long label onto three lines is
+ * worse than a stack, so `grid` still collapses on narrow screens (see
+ * `ProfileCustomLinks`).
+ */
+export type CustomLinkLayout = "stack" | "grid";
+
 export interface ActivityEntry {
   id: string;
   kind: "watched" | "added" | "rated" | "reviewed" | "updated";
@@ -155,7 +316,29 @@ export interface ActivityEntry {
   item?: { title: string; palette: Palette };
 }
 
+/**
+ * How a My Clicks entry sources its picture.
+ *
+ * Phase 4.3 replaced the placeholder-only gallery with two honest external
+ * modes. Neither uploads anything to PRSME: the browser loads the picture from
+ * the owner's chosen host, and PRSME stores only the URL.
+ *
+ *  - `image`  — a direct HTTPS image resource the owner has permission to
+ *               display. The browser `<img>` loads it directly; we never
+ *               proxy or re-host it.
+ *  - `post`   — a public social post URL. Instagram and Facebook are rendered
+ *               through their *official* embed iframes (see
+ *               `components/studio/ClicksPanel.tsx` for the per-platform
+ *               allowlist). Anything that cannot be embedded renders as an
+ *               explicit external-post card instead of a broken tile.
+ */
+export type ClicksMode = "image" | "post";
+
+/** Which platform a `post` entry belongs to. Determines the embed strategy. */
+export type ClicksPostPlatform = "instagram" | "facebook";
+
 export interface ClicksPhoto {
+  /** Stable id. Never an array index — reordering must not rewrite identity. */
   id: string;
   title: string;
   /** Visible dimension label — used to vary the gallery mosaic. */
@@ -163,6 +346,39 @@ export interface ClicksPhoto {
   palette: Palette;
   /** Optional place caption shown on hover. */
   place?: string;
+
+  /* ---- Phase 4.3: external content modes ---- */
+
+  /** How this entry sources its picture. Absent on pre-4.3 drafts = `image`. */
+  mode?: ClicksMode;
+
+  /**
+   * Direct HTTPS URL of an image the owner may display. Rendered in the
+   * browser via a plain `<img>` with `referrerPolicy="no-referrer"`; PRSME
+   * never downloads or stores a copy.
+   */
+  imageUrl?: string;
+
+  /**
+   * Public post URL. Only meaningful when `mode === "post"`. We validate the
+   * host and shape before storing it, and the renderer only builds an embed
+   * iframe for the platforms on the official-embed allowlist.
+   */
+  postUrl?: string;
+  postPlatform?: ClicksPostPlatform;
+
+  /**
+   * Owner-supplied alternative text. Required for `image` entries — a gallery
+   * image with no alt text is invisible to anyone not looking at it.
+   */
+  altText?: string;
+
+  /**
+   * Optional outbound link back to the original source. For `image` entries
+   * this is the page the picture came from; for `post` entries it defaults to
+   * `postUrl`.
+   */
+  sourceUrl?: string;
 }
 
 /**
@@ -254,6 +470,21 @@ export interface ProfileOwner {
   collections: ProfileCollection[];
   recent: ActivityEntry[];
   clicks: ClicksPhoto[];
+  /**
+   * Phase 4.5 — owner-defined outbound buttons, rendered immediately before My
+   * Clicks. Optional: absent means "no Custom Links section at all", which is
+   * different from an empty array (an explicit, honoured decision to hide them).
+   */
+  customLinks?: CustomLinkButton[];
+  /**
+   * Phase 4.7 — the eyebrow / heading / description that introduce the Custom
+   * Links section. Kept apart from `customLinks` so section copy is one record,
+   * not three fields duplicated across every button.
+   *
+   * Optional: absent means the renderer uses `DEFAULT_CUSTOM_LINKS_SECTION`, so
+   * every pre-4.7 profile keeps the copy it always had.
+   */
+  customLinksSection?: CustomLinksSection;
   /** Opt-in profile soundtrack. When undefined the player is not rendered. */
   soundtrack?: ProfileSoundtrack;
   /**
@@ -579,59 +810,144 @@ const recent: ActivityEntry[] = [
 const clicks: ClicksPhoto[] = [
   {
     id: "cl-1",
-    title: "Rear window, March",
+    title: "Tram 28, Calçada de São Francisco",
     place: "Lisbon",
     ratio: "tall",
     palette: "mono",
+    mode: "image",
+    imageUrl:
+      "https://thumb.wikimedia.org/wikipedia/commons/thumb/b/b4/Number_28_tram%2C_Cal%C3%A7ada_de_S%C3%A3o_Francisco%2C_Lisbon%2C_Portugal_julesvernex2.jpg/960px-Number_28_tram%2C_Cal%C3%A7ada_de_S%C3%A3o_Francisco%2C_Lisbon%2C_Portugal_julesvernex2.jpg",
+    altText:
+      "A yellow vintage tram climbing a steep cobbled street in Lisbon, filmed from below.",
+    sourceUrl:
+      "https://commons.wikimedia.org/wiki/File:Number_28_tram,_Cal%C3%A7ada_de_S%C3%A3o_Francisco,_Lisbon,_Portugal_julesvernex2.jpg",
   },
   {
     id: "cl-2",
-    title: "Train to Trieste",
-    place: "Italy, 2024",
+    title: "Lisbon at night",
+    place: "Portugal, 2015",
     ratio: "wide",
     palette: "amber",
+    mode: "image",
+    imageUrl:
+      "https://thumb.wikimedia.org/wikipedia/commons/thumb/1/18/Lisbon_at_night_%2824301569479%29.jpg/960px-Lisbon_at_night_%2824301569479%29.jpg",
+    altText:
+      "Lisbon's rooftops and terraced streets lit by warm window and street light after dark.",
+    sourceUrl:
+      "https://commons.wikimedia.org/wiki/File:Lisbon_at_night_(24301569479).jpg",
   },
   {
     id: "cl-3",
-    title: "Studio, last light",
+    title: "TV tower, Alexanderplatz",
     place: "Berlin",
     ratio: "portrait",
     palette: "iris",
+    mode: "image",
+    imageUrl:
+      "https://thumb.wikimedia.org/wikipedia/commons/thumb/4/47/09065023_-_TV_tower_detailed_-_Berlin_Alexanderplatz_-_night_view.jpg/960px-09065023_-_TV_tower_detailed_-_Berlin_Alexanderplatz_-_night_view.jpg",
+    altText:
+      "The Berlin TV Tower rising above Alexanderplatz at night, its sphere lit against a dark sky.",
+    sourceUrl:
+      "https://commons.wikimedia.org/wiki/File:09065023_-_TV_tower_detailed_-_Berlin_Alexanderplatz_-_night_view.jpg",
   },
   {
     id: "cl-4",
-    title: "Berlin, off-season",
-    place: "Neukölln",
+    title: "Damrak at golden hour",
+    place: "Amsterdam",
     ratio: "square",
     palette: "cyan",
+    mode: "image",
+    imageUrl:
+      "https://thumb.wikimedia.org/wikipedia/commons/thumb/e/ef/Colorful_canal_houses_at_golden_hour_in_Damrak_avenue_Amsterdam_the_Netherlands.jpg/960px-Colorful_canal_houses_at_golden_hour_in_Damrak_avenue_Amsterdam_the_Netherlands.jpg",
+    altText:
+      "Narrow gabled canal houses along the Damrak glowing orange in low evening sun.",
+    sourceUrl:
+      "https://commons.wikimedia.org/wiki/File:Colorful_canal_houses_at_golden_hour_in_Damrak_avenue_Amsterdam_the_Netherlands.jpg",
   },
   {
     id: "cl-5",
-    title: "Botanic, in fog",
-    place: "Edinburgh",
+    title: "Gion, after rain",
+    place: "Kyoto",
     ratio: "tall",
     palette: "forest",
+    mode: "image",
+    imageUrl:
+      "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c1/Streets_of_Gion%2C_Kyoto_-_Gion7712.jpg/960px-Streets_of_Gion%2C_Kyoto_-_Gion7712.jpg",
+    altText:
+      "A narrow Kyoto alley in Gion lined with traditional wooden machiya houses.",
+    sourceUrl:
+      "https://commons.wikimedia.org/wiki/File:Streets_of_Gion,_Kyoto_-_Gion7712.jpg",
   },
   {
     id: "cl-6",
-    title: "Reading, October",
-    place: "Café Geist",
+    title: "Blue hour, Damrak",
+    place: "Amsterdam",
     ratio: "wide",
     palette: "rose",
+    mode: "image",
+    imageUrl:
+      "https://thumb.wikimedia.org/wikipedia/commons/thumb/d/d3/Water_reflection_of_canal_houses_at_blue_hour_in_Damrak_Amsterdam_the_Netherlands.jpg/960px-Water_reflection_of_canal_houses_at_blue_hour_in_Damrak_Amsterdam_the_Netherlands.jpg",
+    altText:
+      "Amsterdam canal houses mirrored in still water under a deep blue evening sky.",
+    sourceUrl:
+      "https://commons.wikimedia.org/wiki/File:Water_reflection_of_canal_houses_at_blue_hour_in_Damrak_Amsterdam_the_Netherlands.jpg",
   },
   {
     id: "cl-7",
-    title: "Backstage, soundcheck",
-    place: "Primavera",
+    title: "Gion alley at night",
+    place: "Kyoto",
     ratio: "portrait",
     palette: "violet",
+    mode: "image",
+    imageUrl:
+      "https://thumb.wikimedia.org/wikipedia/commons/thumb/2/26/Gion_Alley_at_Night.jpg/960px-Gion_Alley_at_Night.jpg",
+    altText:
+      "A quiet Gion alley at night, lantern light spilling onto wet stone.",
+    sourceUrl:
+      "https://commons.wikimedia.org/wiki/File:Gion_Alley_at_Night.jpg",
   },
   {
     id: "cl-8",
+    /*
+     * Phase 4.3 — a public-post entry, kept in the seed so the official-embed
+     * path and the external-card fallback are both exercised by the demo. The
+     * URL is a syntactically valid Instagram post permalink; Instagram decides
+     * whether that specific post is publicly embeddable, and when it is not,
+     * PRSME renders the external-post card rather than a broken tile.
+     */
     title: "North sea, grey",
     place: "Aberdeen",
     ratio: "square",
     palette: "sand",
+    mode: "post",
+    postPlatform: "instagram",
+    postUrl: "https://www.instagram.com/p/C2example1/",
+    altText: "A grey North Sea shoreline under flat winter light.",
+  },
+];
+
+/**
+ * Demo Custom Link Buttons (Phase 4.5, presentation defaults in 4.6).
+ *
+ * Three real, working destinations owned by a fictional filmmaker, chosen to
+ * exercise the layout: two short labels and one long one that must wrap rather
+ * than force horizontal overflow.
+ *
+ * Only `label` is ever rendered. `url` is the destination and nothing else.
+ *
+ * Phase 4.6 keeps these entries field-free on purpose: with no `shape`,
+ * `style`, `colourMode`, or `layout` present, the renderer applies the
+ * documented defaults (`rounded` / `solid` / `theme` / `stack`). That is what
+ * a Phase 4.5 save still looks like, so the demo doubles as proof that the
+ * added fields are genuinely optional rather than required.
+ */
+const customLinks: CustomLinkButton[] = [
+  { id: "lnk-1", label: "Portfolio", url: "https://example.com/noir-portfolio" },
+  { id: "lnk-2", label: "Print shop", url: "https://example.com/noir-prints" },
+  {
+    id: "lnk-3",
+    label: "Bookings & collaborations",
+    url: "https://example.com/noir-bookings",
   },
 ];
 
@@ -683,32 +999,51 @@ export const noirProfile: ProfileOwner = {
   collections,
   recent,
   clicks,
+  customLinks,
+  /*
+   * Phase 4.7 — the demo states the default copy *explicitly* rather than leaving
+   * the field absent. Leaving it absent would also render correctly (the renderer
+   * falls back to the same constants), but an explicit record is what a reader of
+   * the demo data needs: it shows that these three strings are editable profile
+   * data, not decoration wired into a component.
+   */
+  customLinksSection: { ...DEFAULT_CUSTOM_LINKS_SECTION },
   soundtrack: {
     provider: "spotify",
     /**
-     * Verified real track. Pulled directly from Spotify's public track page
-     * (https://open.spotify.com/track/4iV5W9uYEdYUVa79Axb7Rh) and confirmed
-     * from the page's <meta> tags:
-     *   title : Prelude for Piano No. 11 in F-Sharp Minor
-     *   artist: Eduard Abramyan, Sona Shaboyan
-     *   album : Abramyan: Preludes – Rachmaninoff: Sonata No. 2 in B-Flat
-     *           Minor, Op. 36 – Babadjanyan: Capriccio, Improvisation,
-     *           Folksong, Elegy, Poem (Sona Shaboyan · 2010)
-     *   cover : https://i.scdn.co/image/ab67616d0000b2734f61e186facbb486f79e9fd9
+     * The same real track — "Prelude for Piano No. 11 in F-Sharp Minor" by
+     * Eduard Abramyan / Sona Shaboyan — now resolved on **Apple Music**,
+     * because the card's button opens Apple Music.
      *
-     * The album URL is verified the same way (and is also embeddable, so
-     * the component can show the full album if the visitor wants more).
+     * Verified against Apple's public iTunes Search API
+     * (https://itunes.apple.com/search?term=...&media=music&entity=song):
+     *   trackId       : 557706656
+     *   collectionId  : 557706378
+     *   collection    : Abramyan: Preludes – Rachmaninoff: Sonata No. 2 in
+     *                   B-Flat Minor, Op. 36 – Babadjanyan: Capriccio,
+     *                   Improvisation, Folksong, Elegy, Poem (Sona Shaboyan)
+     *   apple track   : https://music.apple.com/us/album/prelude-for-piano-no-11-in-f-sharp-minor/557706378?i=557706656
+     *   cover         : is1-ssl.mzstatic.com/.../100x100bb.jpg (upgraded to
+     *                   1200x1200bb.jpg at render size below)
+     *
+     * `trackUrl` is kept as the Spotify link because it is still what the
+     * studio's oEmbed resolver resolves titles and artwork from; `externalUrl`
+     * is the Apple Music destination the button opens. The component picks its
+     * label and glyph from whichever URL it is actually opening, so the two can
+     * never disagree on screen.
      */
     trackUrl: "https://open.spotify.com/track/4iV5W9uYEdYUVa79Axb7Rh",
     trackTitle: "Prelude for Piano No. 11 in F-Sharp Minor",
     trackArtist: "Eduard Abramyan · Sona Shaboyan",
     albumTitle:
       "Abramyan: Preludes – Rachmaninoff: Sonata No. 2 in B-Flat Minor",
-    coverUrl: "https://i.scdn.co/image/ab67616d0000b2734f61e186facbb486f79e9fd9",
-    coverSource: "Spotify",
+    coverUrl:
+      "https://is1-ssl.mzstatic.com/image/thumb/Music/v4/26/50/46/26504658-11f9-b7d3-3706-7514bc020e94/887396379862.tif/1200x1200bb.jpg",
+    coverSource: "Apple Music",
     palette: "violet",
     caption: "Profile soundtrack",
-    externalUrl: "https://open.spotify.com/album/6fu8fvc7O4p8Gb8KMTBTUW",
+    externalUrl:
+      "https://music.apple.com/us/album/prelude-for-piano-no-11-in-f-sharp-minor/557706378?i=557706656",
   },
 };
 

@@ -5,10 +5,14 @@ import Link from "next/link";
 import { SiteFooter } from "@/components/SiteFooter";
 import { ProfileDraftProvider, useProfileDraft } from "@/components/ProfileDraftProvider";
 import { useThemeMount } from "@/components/useTheme";
+import { ProfileStoreProvider, useProfileStore } from "./ProfileStoreProvider";
+import { useAccount } from "@/components/auth/AccountProvider";
 import { IconCheck, IconReset, IconSave } from "./StudioIcons";
 import { AppearancePanel } from "./AppearancePanel";
 import { IdentityPanel } from "./IdentityPanel";
 import { CollectionsPanel } from "./CollectionsPanel";
+import { ClicksPanel } from "./ClicksPanel";
+import { CustomLinksPanel } from "./CustomLinksPanel";
 import { SectionsPanel } from "./SectionsPanel";
 import { SoundtrackPanel } from "./SoundtrackPanel";
 import { PrivacyPanel } from "./PrivacyPanel";
@@ -28,10 +32,25 @@ export function StudioClient() {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   if (!mounted) return <StudioBootShell />;
+
+  /*
+   * Phase 5 — `ProfileStoreProvider` owns the draft and picks its backend:
+   * localStorage for a guest, the database for a signed-in owner.
+   *
+   * `ProfileDraftProvider` is now a thin adapter over it (see that file), so
+   * every panel below keeps calling `useProfileDraft()` unchanged.
+   *
+   * The comment lives HERE, above the `return`, rather than inside the
+   * parentheses: an expression that opens with `{` is parsed as an object
+   * literal, so `{/* … *\/}` before the first `<` is a syntax error rather
+   * than a JSX comment.
+   */
   return (
-    <ProfileDraftProvider>
-      <StudioShell />
-    </ProfileDraftProvider>
+    <ProfileStoreProvider>
+      <ProfileDraftProvider>
+        <StudioShell />
+      </ProfileDraftProvider>
+    </ProfileStoreProvider>
   );
 }
 
@@ -65,8 +84,17 @@ function StudioShell() {
   // Apply saved theme so the studio chrome reflects the current draft.
   useThemeMount(draft.appearance);
 
-  const onSave = useCallback(() => {
-    const result = save();
+/*
+   * Phase 5 — `save()` is now async.
+   *
+   * For a guest it still resolves immediately (localStorage is synchronous),
+   * but for a signed-in owner it is a network round-trip, and the "Saved" flash
+   * must not appear until the database has actually confirmed the write.
+   * Showing it optimistically would be exactly the lie the brief rules out:
+   * claiming a save succeeded before it did.
+   */
+  const onSave = useCallback(async () => {
+    const result = await save();
     if (result.ok) {
       setSavedFlash(true);
       window.setTimeout(() => setSavedFlash(false), 1600);
@@ -220,6 +248,12 @@ function StudioShell() {
             </div>
             <div hidden={activePanel !== "collections"} data-panel-id="collections">
               <CollectionsPanel />
+            </div>
+            <div hidden={activePanel !== "clicks"} data-panel-id="clicks">
+              <ClicksPanel />
+            </div>
+            <div hidden={activePanel !== "links"} data-panel-id="links">
+              <CustomLinksPanel />
             </div>
             <div hidden={activePanel !== "sections"} data-panel-id="sections">
               <SectionsPanel />

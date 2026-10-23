@@ -10,6 +10,8 @@ const SECTION_DESCRIPTIONS: Record<SectionId, string> = {
     "Mini Spotify card with cover art, title, artist, and a logo-only external action.",
   collections:
     "The grouped shelves of posters, featured items, or compact lists.",
+  links:
+    "Your link buttons — portfolio, shop, bookings. Sits after your shelves and before Recent activity.",
   activity: "A short ledger of small movements — not a stream, not a feed.",
   clicks:
     "Personal photography — concept artwork for a future PRSME surface.",

@@ -52,6 +52,21 @@ server.err.txt
 # ad-hoc capture output text files (cap-*.txt, *-out.txt, st-meta*.txt, ...)
 /cap-*.txt
 /*-out.txt
+/*.out.txt
+/*.err.txt
 /st-meta*.txt
 /ver-persist.txt
 /browser-checks.txt
+
+# free-form scratch output written by the phase scripts
+/artifacts/
+
+# one-off debugging probes kept only while a phase was being chased down;
+# none are wired into package.json, so they are not project code
+/scripts/debug-*.mjs
+/scripts/find-source.mjs
+/scripts/probe-profile.mjs
+/scripts/rail-scroll-probe.mjs
+/scripts/t5-probe.mjs
+/scripts/t5-replay.mjs
+/scripts/run-server.mjs
