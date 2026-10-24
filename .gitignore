@@ -74,3 +74,17 @@ server.err.txt
 /scripts/t5-probe.mjs
 /scripts/t5-replay.mjs
 /scripts/run-server.mjs
+
+# --- PRSME local database stack (scripts/localdb) ---
+# The stack runs a real Postgres, a real PostgREST and a local auth service
+# on this machine. Everything they generate is disposable: the data
+# directory, the toolchain binaries, the logs, and the generated env file.
+
+# the cluster's data directory, the generated env file, and the service logs
+/.tmp-localdb/
+
+# the PostgREST binary and the libpq/OpenSSL/ICU runtime it links against
+/.tmp-tools/
+
+# the schema dump the PostgREST probe writes
+/.tmp-localdbopenapi.json

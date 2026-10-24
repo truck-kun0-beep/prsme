@@ -177,12 +177,17 @@ function toReview(row: ReviewWithRelations): Review {
  * The join to `profiles` is an INNER join in PostgREST's `inner` syntax, so a
  * review whose author has no readable profile row simply does not come back —
  * which is the privacy rule expressed in the query as well as in the policy.
+ *
+ * The join to `media_items` is an INNER join too, and for a different reason:
+ * it is what lets the query be filtered on the media's KIND in the database
+ * rather than in JavaScript after the page has been taken. See
+ * `listPublishedReviews`.
  */
 const REVIEW_SELECT = `
   id, user_id, media_id, rating, title, body, is_spoiler, status,
   created_at, updated_at, published_at,
   profiles!inner(username, profile_state),
-  media_items(id, provider, provider_id, kind, title, alternate_title, creator,
+  media_items!inner(id, provider, provider_id, kind, title, alternate_title, creator,
              creator_role, release_year, artwork_url, artwork_source,
              external_url, description)
 `;
@@ -220,10 +225,56 @@ export async function listPublishedReviews(options: {
     .from("media_reviews")
     .select(REVIEW_SELECT)
     .eq("status", "published")
-    .not("body", "is", null);
+    /*
+     * A rating-only record is a score, not a review, so it does not belong in
+     * a review feed.
+     *
+     * The filter has to be `body IS NOT NULL AND body <> ''`. That is the
+     * loosest condition that still removes a rating-only record, and it is
+     * deliberately not tightened to "the body is not only whitespace":
+     * the aggregate view uses `length(btrim(body)) > 0`, and `btrim` strips
+     * spaces only, so a body of tabs is counted as text by the view but not
+     * by `btrim`. Matching the view exactly would need the same trim set on
+     * both sides.
+     *
+     * The body the application writes is already trimmed (see
+     * `saveReview`), so a body of nothing but spaces cannot reach the
+     * database through the app. A direct client write could plant one, and
+     * the JavaScript filter below removes it — the page is then one row
+     * short, which is honest rather than wrong: the row is not a review.
+     *
+     * This MUST be in the query rather than in JavaScript. It used to be a
+     * `.filter()` AFTER `.range(offset, offset + limit - 1)`, which meant the
+     * database paged over every published row and the application then threw
+     * away the ones that did not qualify — so a page could show fewer reviews
+     * than existed, and the "More reviews" link (which is driven by whether
+     * the page came back full) could stop early. Filtering first means the
+     * page is full of real reviews, and the offset counts real reviews.
+     */
+    .not("body", "is", null)
+    .neq("body", "");
 
   if (options.mediaId) query = query.eq("media_id", options.mediaId);
   if (options.authorId) query = query.eq("user_id", options.authorId);
+
+  /*
+   * The category filter is the media item's catalogue kind, which lives on
+   * the JOINED table.
+   *
+   * `media_items!inner(...)` in the select clause is what makes this
+   * possible: PostgREST turns an `!inner` embed into an INNER JOIN, and only
+   * then can the embedded table's columns be used as filters.
+   *
+   * This is a correctness fix, not an optimisation. The filter used to be
+   * applied in JavaScript AFTER the page was taken, so the Discover category
+   * tabs paged over every kind and then discarded the mismatches. A category
+   * page could therefore show fewer reviews than existed — and, when the
+   * page's rows were all of another kind, show NONE at all, while the
+   * reviews were sitting there unread.
+   */
+  if (options.kind) {
+    query = query.eq("media_items.kind", options.kind);
+  }
 
   const { data, error } = await query
     .order("published_at", { ascending: false, nullsFirst: false })
@@ -231,18 +282,16 @@ export async function listPublishedReviews(options: {
 
   if (error || !data) return [];
 
-  let rows = data as ReviewWithRelations[];
+  const rows = data as ReviewWithRelations[];
 
-  // The kind filter lives on the joined media table. PostgREST can filter it
-  // inline, but doing it here keeps the query identical across every caller.
-  if (options.kind) {
-    rows = rows.filter((r) => {
-      const media = relationToObject<Record<string, unknown>>(r.media_items);
-      return media?.kind === options.kind;
-    });
-  }
-
-  // A review whose body is empty is a rating-only record.
+  /*
+   * A body of only whitespace is not written review text.
+   *
+   * The query above already removed the empty bodies. This is the narrower
+   * rule: a body of nothing but spaces is not a review either, and the
+   * application writes trimmed bodies, so this can only ever remove a row
+   * somebody planted with a direct client write.
+   */
   return rows
     .filter((r) => (r.body ?? "").trim().length > 0)
     .map(toReview);

@@ -825,6 +825,8 @@ idempotent, so a re-run is safe.
 | `20250101000005_media_reviews.sql` | The normalized review table (Phase 6). |
 | `20250101000006_reviews_rls.sql` | RLS for the catalogue and reviews (Phase 6). |
 | `20250101000007_review_backfill.sql` | The `media_review_stats` view + the backfill (Phase 6). |
+| `20250101000008_review_author_fk.sql` | The key from `media_reviews` to `profiles` that PostgREST needs to embed the author (Phase 6.1). |
+| `20250101000009_privilege_lock.sql` | The privilege outer lock, and a boolean that is boolean (Phase 6.1). |
 
 In the dashboard, set:
 
@@ -1085,6 +1087,103 @@ rather than silently passing.
   into Supabase Storage, and no signed URL is ever persisted.
 
 ---
+
+## Phase 6.1 — the local database stack
+
+Phase 6 shipped the schema and the queries. Phase 6.1 is what makes those
+rules **executable**, and it closes four defects that a static check cannot
+see.
+
+### What Phase 6.1 fixed
+
+| Defect | Symptom | Fix |
+| --- | --- | --- |
+| No foreign key between `media_reviews` and `profiles` | Every review query failed with *"Could not find a relationship between 'media_reviews' and 'profiles'"*. Discover, the media page, the review page, and every review write were broken. | `20250101000008_review_author_fk.sql` — a direct key from `media_reviews.user_id` to `profiles.user_id`. |
+| Broad default privileges were never revoked | `anon` held `TRUNCATE` on `media_reviews`. RLS does not govern `TRUNCATE`, so an anonymous request could empty the whole review table. | `20250101000009_privilege_lock.sql` — revoke everything from `public`/`anon`/`authenticated`, then grant exactly what the app needs. |
+| `can_read_review()` could return `NULL` | The helper is declared `returns boolean`, but `(select auth.uid()) = review_user_id` evaluates to `NULL` without a session. The policy still hid the row (`NULL` is not `TRUE`), but the helper answered "unknown" instead of "no". | The same migration wraps the comparison in `coalesce(..., false)`. |
+| The Discover category filter ran in JavaScript | The page was taken in SQL and then filtered in JS, so a category page could show fewer reviews than existed — including none at all. | `lib/supabase/reviews.ts` — `media_items!inner(...)` plus a `.eq("media_items.kind", …)` filter **in the query**. |
+
+Two verification scripts had the same class of bug and are fixed in the same
+phase:
+
+- `scripts/phase5-verify.mjs` passed `{ url, key }` to a function that reads
+  `publishableKey`, so the Phase 5 live section had **never run** on any
+  project — it failed with "supabaseKey is required" and the failure was
+  swallowed.
+- `scripts/phase6-verify.mjs` asserted that an anonymous `UPDATE` *raised an
+  error*. It does not: Postgres raises nothing, the statement simply affects
+  zero rows, and PostgREST reports success. The assertion is now about the
+  **data** — the catalogue row's title must be unchanged.
+
+### The stack
+
+`supabase start` needs Docker, and the Supabase CLI ships no Windows binary.
+So `scripts/localdb/` runs the real thing anyway:
+
+| Piece | What it is |
+| --- | --- |
+| **PostgreSQL 18** | The real server, from the `embedded-postgres` npm package. |
+| **PostgREST 16.5** | The real REST gateway, fetched by `npm run db:tools`. |
+| **auth shim** | A GoTrue-compatible service (`scripts/localdb/auth-server.mjs`) that issues real HS256 JWTs signed with the secret PostgREST trusts, so `auth.uid()` resolves the `sub` claim. |
+| **gateway** | Routes `/rest/v1`, `/auth/v1` and `/storage/v1` to the three services, which is the job Kong does on a real project. |
+
+`scripts/localdb/00-bootstrap.sql` recreates the parts of a Supabase project
+the migrations depend on: the `anon` / `authenticated` / `service_role` roles,
+the `auth` schema with `auth.users`, the claim readers, and the `storage`
+schema. **The policies under test are the project's own, unmodified.**
+
+### Running it
+
+```bash
+npm install
+npm run db:tools          # fetch PostgREST (once)
+npm run db:start:fresh    # start the stack and apply the migration chain
+npm run db:status
+npm run db:stop
+```
+
+`db:start:fresh` drops the database and re-applies `supabase/migrations/*.sql`
+in filename order, so a run always starts from nothing.
+
+### The live suites
+
+```bash
+npm run db:test            # RLS + SQL + leak + category
+npm run db:test:rls        # policies, over REST, as real roles
+npm run db:test:sql        # policies, from inside the database
+npm run db:test:leak       # a private review must not leak into any surface
+npm run db:test:category   # Discover's category paging
+npm run db:test:flow       # the whole review flow, through the app's own routes
+npm run db:test:browser    # the same pages, in a real browser, at 390px and 1280px
+```
+
+The last two drive the **application**, so they need the app running against
+the local stack:
+
+```bash
+npm run db:build           # build with the local env inlined
+node scripts/localdb/serve-prod.mjs   # serve it on :3100
+```
+
+`db:build` exists because `NEXT_PUBLIC_*` is inlined at **build** time. A
+plain `npm run build` bakes `undefined` into the bundle, and the app then
+renders its "connect a Supabase project" state while the database sits there,
+fully populated, four ports away.
+
+`db:test:sql` runs `scripts/phase6-sql-tests.sql`, which is also pasteable
+into the Supabase SQL editor. It creates everything under a
+`phase6_sql_test` schema and drops it again, so the `public` schema is never
+touched.
+
+The Phase 5 and Phase 6 suites can be pointed at the local stack, which turns
+their skipped live sections into real assertions:
+
+```bash
+node scripts/localdb/with-db.mjs scripts/phase5-verify.mjs
+node scripts/localdb/with-db.mjs scripts/phase6-verify.mjs
+```
+
+---
 ---
 
 ## Local development
@@ -1117,6 +1216,11 @@ Open <http://localhost:3000> for the landing page and <http://localhost:3000/u/n
 | `npm run start` | Run the production build (defaults to port 3000). |
 | `npm run lint` | ESLint via `next lint`. |
 | `npm run typecheck` | `tsc --noEmit`. |
+| `npm run test:phase5` | Phase 5 verification (RLS policies, server-boundary invariants, guest fallbacks). |
+| `npm run test:phase6` | Phase 6 verification (catalogue, reviews, aggregates, presentation rules). |
+| `npm run db:start:fresh` | Bring up the local database stack and apply the migration chain (Phase 6.1). |
+| `npm run db:build` | Build the app with the local database's env inlined (Phase 6.1). |
+| `npm run db:test` | The live database suites — RLS, SQL, leak, category (Phase 6.1). |
 
 ### Production smoke test
 
@@ -1154,7 +1258,10 @@ app/
   globals.css                Design tokens, base styles, reduced-motion handling
 middleware.ts                Session refresh (Phase 5)
 supabase/migrations/         profiles, RLS, avatars (Phase 5); media_items,
-                             media_reviews, review RLS, backfill (Phase 6)
+                             media_reviews, review RLS, backfill (Phase 6);
+                             author FK, privilege lock (Phase 6.1)
+scripts/localdb/             The local database stack and its live test suites
+                             (Phase 6.1) — not shipped, not part of the app
 components/
   SiteNav.tsx                Responsive navigation; avatar + account menu when signed in
   SiteFooter.tsx             Multi-column footer

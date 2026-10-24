@@ -321,7 +321,14 @@ async function main() {
   section("Live database");
   if (url && key) {
     try {
-      await verifyAgainstDatabase({ url, key });
+      /*
+       * The key is named `publishableKey` here because that is the name
+       * `verifyAgainstDatabase` reads. Passing `key` instead left the
+       * argument undefined, and the live section failed with "supabaseKey is
+       * required" — which meant the Phase 5 RLS checks had never actually
+       * run, on any project, since this was written.
+       */
+      await verifyAgainstDatabase({ url, publishableKey: key });
     } catch (error) {
       failed++;
       failures.push(`live checks threw: ${error.message}`);
@@ -349,10 +356,18 @@ async function main() {
   }
   console.log("=".repeat(60));
 
-  process.exit(failed === 0 ? 0 : 1);
+  /*
+   * The exit code is set rather than `process.exit()` called.
+   *
+   * The live section makes `fetch` calls that carry an `AbortSignal.timeout`,
+   * and Node's Windows event loop asserts if the process is torn down while
+   * those timers are still pending. Letting the loop drain is the same
+   * outcome with no assertion.
+   */
+  process.exitCode = failed === 0 ? 0 : 1;
 }
 
 main().catch((error) => {
   console.error(error);
-  process.exit(1);
+  process.exitCode = 1;
 });

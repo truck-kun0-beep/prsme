@@ -636,16 +636,37 @@ async function verifyLiveDatabase() {
   );
 
   // --- anonymous cannot rewrite catalogue metadata ---------------------------
-  const { error: anonUpdateError } = await supabase
+  /*
+   * The assertion is about the DATA, not about an error.
+   *
+   * When an RLS policy filters every row out of an UPDATE, Postgres does not
+   * raise — the statement simply affects zero rows, and PostgREST reports
+   * success with an empty body. So "the request returned an error" is not the
+   * security property; "the catalogue row was not changed" is.
+   */
+  const { data: mediaBeforeAnonWrite } = await supabase
+    .from("media_items")
+    .select("id, title")
+    .eq("provider", "cinemeta")
+    .limit(1)
+    .maybeSingle();
+
+  await supabase
     .from("media_items")
     .update({ title: "Rewritten by anon" })
     .eq("provider", "cinemeta")
     .limit(1);
 
+  const { data: mediaAfterAnonWrite } = await supabase
+    .from("media_items")
+    .select("id, title")
+    .eq("id", mediaBeforeAnonWrite?.id ?? "")
+    .maybeSingle();
+
   check(
     "anonymous UPDATE of a catalogue record is refused",
-    !!anonUpdateError,
-    anonUpdateError ? "" : "the update unexpectedly succeeded",
+    mediaAfterAnonWrite?.title === mediaBeforeAnonWrite?.title,
+    `the title became "${mediaAfterAnonWrite?.title}"`,
   );
 
   // --- the catalogue is world-readable ----------------------------------------
@@ -710,5 +731,14 @@ console.log(
 if (failed > 0) {
   console.log("\nFailures:");
   for (const f of failures) console.log(`  - ${f}`);
-  process.exit(1);
 }
+
+/*
+ * The exit code is set rather than `process.exit()` called.
+ *
+ * The live section makes `fetch` calls that carry an `AbortSignal.timeout`,
+ * and Node's Windows event loop asserts if the process is torn down while
+ * those timers are still pending. Letting the loop drain is the same
+ * outcome with no assertion.
+ */
+process.exitCode = failed === 0 ? 0 : 1;
