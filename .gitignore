@@ -88,3 +88,10 @@ server.err.txt
 
 # the schema dump the PostgREST probe writes
 /.tmp-localdbopenapi.json
+
+# --- Supabase CLI local state ---
+# `supabase link` writes the linked project's ref, its pooler URL and the
+# remote version stamps into supabase/.temp/. That is machine state, and a
+# stale link silently points `supabase db push` at whatever project was
+# linked last, so it must never be committed.
+supabase/.temp/

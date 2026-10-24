@@ -810,8 +810,18 @@ Then apply the schema, in filename order:
 
 ```bash
 npx supabase link --project-ref <your-project-ref>
+npx supabase db push --dry-run   # read this output before the next line
 npx supabase db push
 ```
+
+**Confirm the linked project is the PRSME one before pushing.** `supabase
+link` remembers whatever was linked last, so a stale link will push PRSME's
+schema into an unrelated database. Check with `npx supabase migration list
+--linked`: the dry run must list PRSME's nine migrations and the remote
+column must be empty. If the remote column shows versions that are not in
+`supabase/migrations/`, you are pointed at the wrong project — unlink and
+relink. See [Phase 6.2](#phase-62--deployment-to-supabase-and-what-is-actually-verified)
+for the case this happened in.
 
 Or paste each file in `supabase/migrations/` into the SQL editor. They are
 idempotent, so a re-run is safe.
@@ -1182,6 +1192,153 @@ their skipped live sections into real assertions:
 node scripts/localdb/with-db.mjs scripts/phase5-verify.mjs
 node scripts/localdb/with-db.mjs scripts/phase6-verify.mjs
 ```
+
+---
+
+## Phase 6.2 — deployment to Supabase, and what is actually verified
+
+Phase 6.2 was to apply the two outstanding migrations to the PRSME Supabase
+project and verify the review and privacy behaviour against the **remote**
+database.
+
+**The migrations were not applied. The PRSME Supabase project does not exist
+in the account the CLI is authenticated against.** Nothing was pushed, no
+remote schema was altered, and no `migration repair` was run.
+
+### The blocker, precisely
+
+The Supabase CLI is authenticated (user `jubaerh662@gmail.com`, org
+`monoform-dev`). That account contains exactly **one** project:
+
+| | |
+| --- | --- |
+| Project ref | `mawmytxztwhjjokmugpb` |
+| Name | `monoform-dev` |
+| Region | `ap-northeast-1` |
+| Org id | `fzvkqxyamhxbzgmhsrwn` |
+
+Its public schema is an **e-commerce** application — `orders`, `order_items`,
+`order_notifications`, `customer_addresses`, `customer_profiles`,
+`newsletter_subscriptions`, `support_messages`, `admin_allowlist` — with
+functions `is_admin(uuid)` and `next_order_number()`. It contains **no**
+`profiles`, **no** `media_items`, **no** `media_reviews`, **no**
+`media_review_stats`, and **no** `can_read_review()`.
+
+Its remote migration history is `0001`–`0005`, a different chain entirely:
+
+```
+   Local            | Remote | Time (UTC)
+  ------------------|--------|-----------------------
+   ` `              | `0001` | `0001`
+   ` `              | `0002` | `0002`
+   ` `              | `0003` | `0003`
+   ` `              | `0004` | `0004`
+   ` `              | `0005` | `0005`
+   `20250101000001` | ` `    | `2025-01-01 00:00:01`
+   ... through `20250101000009`
+```
+
+So **none** of PRSME's nine migrations are applied there — not just 8 and 9.
+The two outstanding migrations are not a tail of a partially-migrated
+database; the database does not belong to this application at all.
+
+The dry run says so explicitly:
+
+```
+$ npx supabase db push --dry-run --project-ref mawmytxztwhjjokmugpb
+DRY RUN: migrations will *not* be pushed to the database.
+Remote migration versions not found in local migrations directory.
+```
+
+Pushing there would have created `media_items` / `media_reviews` / `profiles`
+inside an unrelated shop's database, rewritten that database's table
+privileges (`revoke all on table public.media_items from public, anon,
+authenticated` — against a schema the application does not own), and pushed
+nine migration rows onto a history table that already tracks a different
+chain. That is why the push was not run.
+
+### What to do to unblock
+
+1. **Create the PRSME project**, if it does not already exist:
+   <https://supabase.com/dashboard>, or
+   `npx supabase projects create prsme --org-id <your-org-id> --region <region> --db-password <password>`
+2. **Link it**: `npx supabase link --project-ref <prsme-project-ref>`
+   (the CLI prints the ref it linked; confirm it is PRSME's, not another
+   project's).
+3. **Apply the chain**: `npx supabase db push --dry-run` first. The dry run
+   must list exactly the nine PRSME migrations and no remote versions. Then
+   `npx supabase db push`.
+4. **Point the app at it**: put the project URL and the **publishable** key in
+   `.env.local`:
+   ```
+   NEXT_PUBLIC_SUPABASE_URL=https://<prsme-project-ref>.supabase.co
+   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
+   ```
+5. **Re-run the live suites** against that project:
+   `npm run test:phase5`, `npm run test:phase6`, and the `db:test:*` suites
+   pointed at the remote URL.
+
+The PRSME project ref is **not** recorded anywhere in the repository — the
+only env file ever committed is `.env.example`, and git history contains no
+project reference. It has to be supplied from the dashboard.
+
+> `supabase/.temp/` is now git-ignored. It holds the linked project ref, its
+> pooler URL and the remote version stamps, and a stale link silently points
+> `supabase db push` at whatever was linked last.
+
+### What *is* verified
+
+Everything in the table below was executed against a **real PostgreSQL 18
+server** running the project's own committed migrations, unmodified, with real
+`anon` / `authenticated` roles and real rows — reached through a real
+PostgREST 16.5 gateway and a GoTrue-compatible auth service that signs real
+HS256 JWTs. It is a genuine database, and the policies under test are the
+project's own. It is **not** the remote Supabase project.
+
+| Suite | Command | Result |
+| --- | --- | --- |
+| Migration chain | `npm run db:start:fresh` | 9 migrations + bootstrap applied to a clean database |
+| Schema objects | read-only catalogue queries | 15/15 passed — FK, privilege lock, `can_read_review()` contract, RLS, unique indexes |
+| Live RLS + aggregates | `npm run db:test:rls` | **39 passed, 0 failed** |
+| Live SQL assertions | `npm run db:test:sql` | **21/21 assertions passed**, 86 statements |
+| Privacy leak surfaces | `npm run db:test:leak` | **22 passed, 0 failed** |
+| Discover category paging | `npm run db:test:category` | 5 passed, 0 failed |
+| Application review flow (real browser) | `npm run db:test:flow` | **51 passed, 0 failed** |
+| Browser rendering, 390px + 1280px | `npm run db:test:browser` | **46 passed, 0 failed** |
+| Phase 5 suite, live DB on | `node scripts/localdb/with-db.mjs scripts/phase5-verify.mjs` | 35 passed, 0 failed, **0 skipped** |
+| Phase 6 suite, live DB on | `node scripts/localdb/with-db.mjs scripts/phase6-verify.mjs` | 93 passed, 0 failed, **0 skipped** |
+| TypeScript | `npm run typecheck` | clean |
+| Lint | `npm run lint` | no warnings, no errors |
+| Production build | `npm run db:build` | compiled successfully, 25 routes |
+
+The behavioural claims from the brief map onto those suites as follows.
+
+| Required behaviour | Verified by | Result |
+| --- | --- | --- |
+| An authorized user can publish a review | `db:test:flow`, `db:test:rls` | pass |
+| The review is stored under the right author and canonical media record | `db:test:flow` | pass — `media_reviews` row, correct `user_id`, one `media_items` row |
+| It appears on the profile, media page, review page and Discover | `db:test:flow` | pass — all four surfaces |
+| A second user reviews the same media without duplicating it | `db:test:flow`, `db:test:rls` | pass — same canonical record, two reviews |
+| Editing updates rather than adds | `db:test:flow`, `db:test:rls` | pass — the row is updated in place |
+| Drafts stay private | `db:test:rls`, `db:test:flow` | pass — invisible to anonymous and to other accounts |
+| An unrelated user cannot edit or delete another's review | `db:test:rls`, `db:test:sql` | pass — both refused |
+| Private profiles do not leak | `db:test:leak`, `db:test:flow` | pass — REST, Discover, media page, review page, metadata, aggregates |
+| Aggregates use the correct eligible records | `db:test:rls`, `db:test:sql` | pass — drafts and private-profile reviews excluded, rating-only counted correctly |
+| Anonymous visitors read public reviews but not private data | `db:test:rls`, `db:test:leak` | pass — public review readable, draft and private profile refused |
+
+**Not verified against a remote Supabase project:** everything above. A real
+Supabase project differs from the local stack in ways that matter — its
+`public` schema carries broad default privileges (which is exactly what
+migration 9 exists to revoke), its `auth` service is GoTrue rather than the
+shim, and its edge cases are managed by the platform. The local stack
+reproduces those, but it does not *replace* the real thing. The migration
+chain must be applied to PRSME's actual project and the suites re-run there
+before the remote behaviour is claimed.
+
+**Still requires a human:** the Phase 5 suite notes that
+registration → email confirmation → onboarding → save → sign-in on a second
+device needs interactive credentials and cannot be automated. It was not
+performed here and is not claimed.
 
 ---
 ---
