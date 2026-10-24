@@ -38,6 +38,8 @@
     "db:test:leak": "node scripts/localdb/leak-tests.mjs",
     "db:tools": "node scripts/localdb/fetch-tools.mjs",
     "db:build": "node scripts/localdb/build-with-db.mjs",
+    "db:remote:list": "node scripts/remote-db.mjs migration list",
+    "db:remote:push": "node scripts/remote-db.mjs db push",
     "db:test:category": "node scripts/localdb/category-tests.mjs",
     "db:test:flow": "node scripts/localdb/flow-tests.mjs",
     "db:test:browser": "node scripts/localdb/browser-tests.mjs",

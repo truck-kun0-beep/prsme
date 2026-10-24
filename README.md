@@ -826,6 +826,19 @@ for the case this happened in.
 Or paste each file in `supabase/migrations/` into the SQL editor. They are
 idempotent, so a re-run is safe.
 
+If the CLI's account cannot see the project, `scripts/remote-db.mjs` pushes
+straight to the database instead, reading the password from a git-ignored
+local file:
+
+```bash
+# .env.local.db-password  (git-ignored)
+# SUPABASE_DB_PASSWORD=<the project's database password>
+
+npm run db:remote:list
+npm run db:remote:push -- --dry-run
+npm run db:remote:push
+```
+
 | Migration | What it does |
 | --- | --- |
 | `20250101000001_profiles.sql` | The `profiles` table, username constraints, indexes, `updated_at` trigger. |
@@ -1197,15 +1210,19 @@ node scripts/localdb/with-db.mjs scripts/phase6-verify.mjs
 
 ## Phase 6.2 — deployment to Supabase, and what is actually verified
 
-Phase 6.2 was to apply the two outstanding migrations to the PRSME Supabase
+Phase 6.2 was to apply the outstanding migrations to the PRSME Supabase
 project and verify the review and privacy behaviour against the **remote**
 database.
 
-**The migrations were not applied. The PRSME Supabase project does not exist
-in the account the CLI is authenticated against.** Nothing was pushed, no
-remote schema was altered, and no `migration repair` was run.
+**The migrations were not applied. The Supabase CLI's account cannot see the
+PRSME project.** Nothing was pushed, no remote schema was altered, and no
+`migration repair` was run.
 
-### The blocker, precisely
+The PRSME project itself exists, is reachable, and is empty. What is missing
+is the CLI's access to it — see [the blocker](#the-blocker-the-clis-account-cannot-see-this-project)
+below.
+
+### The ecommerce project, and why it was never the target
 
 The Supabase CLI is authenticated (user `jubaerh662@gmail.com`, org
 `monoform-dev`). That account contains exactly **one** project:
@@ -1239,9 +1256,6 @@ Its remote migration history is `0001`–`0005`, a different chain entirely:
 ```
 
 So **none** of PRSME's nine migrations are applied there — not just 8 and 9.
-The two outstanding migrations are not a tail of a partially-migrated
-database; the database does not belong to this application at all.
-
 The dry run says so explicitly:
 
 ```
@@ -1255,36 +1269,93 @@ inside an unrelated shop's database, rewritten that database's table
 privileges (`revoke all on table public.media_items from public, anon,
 authenticated` — against a schema the application does not own), and pushed
 nine migration rows onto a history table that already tracks a different
-chain. That is why the push was not run.
+chain. That is why the push was not run, and it remains the reason not to
+run it: **`mawmytxztwhjjokmugpb` is not the deployment target.**
 
-### What to do to unblock
+### Phase 6.2, second attempt — the PRSME project now exists
 
-1. **Create the PRSME project**, if it does not already exist:
-   <https://supabase.com/dashboard>, or
-   `npx supabase projects create prsme --org-id <your-org-id> --region <region> --db-password <password>`
-2. **Link it**: `npx supabase link --project-ref <prsme-project-ref>`
-   (the CLI prints the ref it linked; confirm it is PRSME's, not another
-   project's).
-3. **Apply the chain**: `npx supabase db push --dry-run` first. The dry run
-   must list exactly the nine PRSME migrations and no remote versions. Then
-   `npx supabase db push`.
-4. **Point the app at it**: put the project URL and the **publishable** key in
-   `.env.local`:
-   ```
-   NEXT_PUBLIC_SUPABASE_URL=https://<prsme-project-ref>.supabase.co
-   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
-   ```
-5. **Re-run the live suites** against that project:
-   `npm run test:phase5`, `npm run test:phase6`, and the `db:test:*` suites
-   pointed at the remote URL.
+A dedicated PRSME project was created and configured in `.env.local`:
 
-The PRSME project ref is **not** recorded anywhere in the repository — the
-only env file ever committed is `.env.example`, and git history contains no
-project reference. It has to be supplied from the dashboard.
+| | |
+| --- | --- |
+| Project ref | `dmuvbiojelzojeqvrcli` |
+| Region | `ap-southeast-1` |
+| Publishable key | `sb_publishable_…` (46 chars, **not** a service-role key) |
 
-> `supabase/.temp/` is now git-ignored. It holds the linked project ref, its
-> pooler URL and the remote version stamps, and a stale link silently points
-> `supabase db push` at whatever was linked last.
+The project is **reachable and completely empty**. Every PRSME relation
+returns `PGRST205 — Could not find the table in the schema cache`, which is
+"absent", not "hidden by RLS" (a deliberately non-existent control table
+returns the identical error). The `auth` service answers, signup is enabled,
+and email confirmation is on (`mailer_autoconfirm = false`).
+
+So **all nine migrations are pending**, not just 8 and 9. The chain is
+additive — no `drop`, `truncate` or `delete` anywhere in it.
+
+#### The blocker: the CLI's account cannot see this project
+
+The Supabase CLI is authenticated as `jubaerh662@gmail.com`, whose only
+organization is `monoform-dev` (`fzvkqxyamhxbzgmhsrwn`). That account sees
+exactly one project — `mawmytxztwhjjokmugpb`, the ecommerce database — and
+**not** `dmuvbiojelzojeqvrcli`.
+
+```
+$ npx supabase link --project-ref dmuvbiojelzojeqvrcli
+Unexpected error retrieving remote project status:
+{"message":"Your account does not have the necessary privileges to access this
+endpoint. …"}
+```
+
+`--password` does not help: the CLI resolves the project through the
+Management API (`GET /v1/projects/<ref>`) *before* it connects, and that call
+is denied. `supabase gen types --project-id` and
+`supabase projects api-keys --project-ref` fail the same way, so this is the
+token's project access, not the listing.
+
+**The database itself is reachable.** The regional pooler routes to it — a
+deliberately wrong password produces
+`FATAL: password authentication failed for user "postgres"` rather than a
+routing failure — and `supabase db push --db-url` connects to it directly,
+bypassing the Management API entirely.
+
+#### Two ways to unblock
+
+**Option A — give the CLI account access to the project.** In the Supabase
+dashboard, add the CLI's account to the project's organization (or to the
+project itself), then:
+
+```bash
+npx supabase login          # if a different account must own the project
+npx supabase link --project-ref dmuvbiojelzojeqvrcli
+npx supabase migration list --linked
+npx supabase db push --dry-run
+npx supabase db push
+```
+
+**Option B — push straight to the database, no Management API access needed.**
+`scripts/remote-db.mjs` drives the CLI through `--db-url`:
+
+```bash
+# 1. Create this file (it is git-ignored) with one line:
+#      SUPABASE_DB_PASSWORD=<the project's database password>
+.env.local.db-password
+
+# 2. Then:
+npm run db:remote:list
+npm run db:remote:push -- --dry-run
+npm run db:remote:push
+```
+
+The password is read from that file and percent-encoded into the connection
+URL in memory. It is never passed as a command-line argument, so it never
+reaches the shell history or the process list, and the script never prints
+it. **Never paste the password into chat.**
+
+Either way, the dry run must list exactly the nine PRSME migrations and the
+remote column must be empty before the push.
+
+> The PRSME project ref is **not** recorded in the repository — the only env
+> file ever committed is `.env.example`. It lives in `.env.local`, which is
+> git-ignored.
 
 ### What *is* verified
 
@@ -1311,6 +1382,21 @@ project's own. It is **not** the remote Supabase project.
 | Lint | `npm run lint` | no warnings, no errors |
 | Production build | `npm run db:build` | compiled successfully, 25 routes |
 
+Against the **remote** PRSME project `dmuvbiojelzojeqvrcli`, with
+`.env.local` loaded:
+
+| Suite | Result |
+| --- | --- |
+| Phase 5 suite, live DB on | 33 passed, **1 failed**, 1 skipped — `is_username_taken` RPC absent, and `public.profiles` absent from the schema cache |
+| Phase 6 suite, live DB on | 91 passed, **2 failed** — `public.media_items` and `public.media_review_stats` absent from the schema cache |
+| TypeScript | clean |
+| Lint | no warnings, no errors |
+| Production build | compiled successfully, 25 routes (with `- Environments: .env.local`) |
+
+Those three failures are the *absence of the schema*, not a defect in it:
+they are exactly the assertions that require the tables to exist. They will
+pass once the migrations are applied.
+
 The behavioural claims from the brief map onto those suites as follows.
 
 | Required behaviour | Verified by | Result |
@@ -1335,10 +1421,20 @@ reproduces those, but it does not *replace* the real thing. The migration
 chain must be applied to PRSME's actual project and the suites re-run there
 before the remote behaviour is claimed.
 
+What *was* confirmed about the remote project `dmuvbiojelzojeqvrcli` itself:
+it answers on `/auth/v1/health`, it accepts the publishable key, signup is
+enabled, email confirmation is on, and its `public` schema is empty — no
+PRSME table, function or view exists yet, so all nine migrations are still
+pending.
+
 **Still requires a human:** the Phase 5 suite notes that
 registration → email confirmation → onboarding → save → sign-in on a second
 device needs interactive credentials and cannot be automated. It was not
 performed here and is not claimed.
+
+**Still requires the project owner:** the CLI's account access to the PRSME
+project, and the project's database password. Neither can be supplied from
+this session, and neither should be pasted into chat.
 
 ---
 ---

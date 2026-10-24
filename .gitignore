@@ -95,3 +95,7 @@ server.err.txt
 # stale link silently points `supabase db push` at whatever project was
 # linked last, so it must never be committed.
 supabase/.temp/
+
+# the PRSME project's database password, read by scripts/remote-db.mjs.
+# Git-ignored like every other credential in this repository.
+.env.local.db-password
