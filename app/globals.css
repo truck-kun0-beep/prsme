@@ -1425,6 +1425,52 @@ h3 {
   display: flex;
 }
 
+/* --- Custom Links: one centred column ------------------------------------
+ *
+ * The section used to read as three unrelated boxes: the eyebrow/heading
+ * block, the description (capped at its own measure), and the button list
+ * (capped at 34rem), all left-aligned inside a much wider canvas. On a
+ * desktop that left the whole section hugging the left of the page, which is
+ * the reported problem.
+ *
+ * The fix is ONE shared column. The heading block and the buttons live in
+ * the same column, centred in the page canvas, so they read as one cohesive
+ * section instead of three stacked fragments — and the buttons are centred
+ * against the page, not merely inside their own narrow box.
+ *
+ * The column is 75% of the available content width, capped at 900px. The
+ * percentage keeps it proportional to whichever layout preset the profile
+ * uses (the canvas is 940 / 1120 / 1360px), and the cap stops the buttons
+ * becoming a banner on a very wide screen. At 75% of a 1056px canvas that is
+ * a 792px column — comfortably inside the 70–80% band the brief asks for.
+ *
+ * Mobile is deliberately untouched. The column is the full content width
+ * there, so the buttons already filled it and the copy stays left-aligned —
+ * the mobile layout was already right and is not changed here.
+ */
+.pf-links-column {
+  width: 100%;
+  margin-inline: auto;
+}
+@media (min-width: 768px) {
+  .pf-links-column {
+    width: 75%;
+    max-width: 900px;
+    text-align: center;
+  }
+  /*
+   * The column now owns the measure. The list's own 34rem cap and the
+   * description's `max-w-2xl` would both re-narrow it and break the
+   * alignment the column exists to create.
+   */
+  .pf-links-column .pf-custom-links-list {
+    max-width: none;
+  }
+  .pf-links-column .pf-links-header .pf-body {
+    max-width: none;
+  }
+}
+
 /*
  * Phase 4.6 — the opt-in grid.
  *

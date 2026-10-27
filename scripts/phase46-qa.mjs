@@ -167,6 +167,7 @@ for (const vw of VIEWPORTS) {
     const btns = Array.from(nav.querySelectorAll('[data-testid="custom-link"]'));
     const navRect = nav.getBoundingClientRect();
     const list = nav.querySelector('.pf-custom-links-list');
+    const column = nav.closest('.pf-links-column');
     return {
       missing: false,
       count: btns.length,
@@ -188,6 +189,20 @@ for (const vw of VIEWPORTS) {
       // Long label must wrap, not clip.
       clipped: btns.filter(b => b.scrollHeight > b.clientHeight + 1).length,
       maxWidth: Math.round(list.getBoundingClientRect().width),
+      /*
+       * The column the buttons live in, and whether they fill it.
+       *
+       * On the saved profile the section is the .pf-links-column; on the
+       * server-rendered demo the same class wraps the buttons. Either way the
+       * nearest column ancestor is the thing the buttons must fill.
+       */
+      columnWidth: column ? Math.round(column.getBoundingClientRect().width) : null,
+      columnOffsetFromCentre: column
+        ? Math.round(column.getBoundingClientRect().left + column.getBoundingClientRect().width / 2 - document.documentElement.clientWidth / 2)
+        : null,
+      fillsColumn: column
+        ? Math.abs(btns[0].getBoundingClientRect().width - list.getBoundingClientRect().width) <= 1
+        : false,
       docOverflowX: document.documentElement.scrollWidth - document.documentElement.clientWidth,
       urlInText: btns.filter(b => b.textContent.includes('http')).length,
       rel: btns[0] ? btns[0].getAttribute('rel') : null,
@@ -219,10 +234,29 @@ for (const vw of VIEWPORTS) {
   check(`@${vw}px: rel=noopener noreferrer`, g.rel === "noopener noreferrer", g.rel);
   check(`@${vw}px: opens in a new tab`, g.target === "_blank", g.target);
   check(`@${vw}px: every button has an accessible name`, g.accessibleName === true);
+  /*
+   * Phase 6.3 — the Custom Links column was widened and centred.
+   *
+   * The old contract capped the buttons at 34rem (544px), which is exactly the
+   * narrow left-aligned column this change replaced. The new contract is:
+   *
+   *   - mobile (< 768px): the buttons fill the content width, as before.
+   *   - desktop (>= 768px): the buttons fill the `.pf-links-column`, which is
+   *     75% of the available content width, capped at 900px.
+   *
+   * The assertion therefore checks the column the buttons now live in rather
+   * than a fixed pixel cap, and it also checks the column is centred — the
+   * other half of the reported problem.
+   */
   check(
-    `@${vw}px: buttons have a sensible max width`,
-    g.maxWidth > 0 && g.maxWidth <= Math.min(vw, 544),
-    { maxWidth: g.maxWidth, vw },
+    `@${vw}px: buttons fill their column`,
+    g.maxWidth > 0 && g.maxWidth <= Math.min(vw, 900) && g.fillsColumn,
+    { maxWidth: g.maxWidth, columnWidth: g.columnWidth, vw },
+  );
+  check(
+    `@${vw}px: the column is centred in the page`,
+    g.columnOffsetFromCentre !== null && Math.abs(g.columnOffsetFromCentre) <= 2,
+    { columnOffsetFromCentre: g.columnOffsetFromCentre, vw },
   );
 
   if ([390, 1280].includes(vw)) {

@@ -71,7 +71,10 @@ export function CustomLinksSectionHeader({
   if (!eyebrow && !heading && !description) return null;
 
   return (
-    <header className={`mb-6 md:mb-7 ${className}`.trim()} data-testid="custom-links-heading-block">
+    <header
+      className={`pf-links-header mb-6 md:mb-7 ${className}`.trim()}
+      data-testid="custom-links-heading-block"
+    >
       {eyebrow && <p className="pf-eyebrow">{eyebrow}</p>}
       {heading && (
         <h2

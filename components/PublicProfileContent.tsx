@@ -262,17 +262,25 @@ export function PublicProfileContent({
                  * show — `CustomLinksSectionHeader` returns `null` for an
                  * all-blank section, and a `Reveal` around a `null` would leave an
                  * empty `.reveal` div contributing its own height.
+                 *
+                 * The copy and the buttons share ONE `.pf-links-column`, so they
+                 * sit in the same centred column and read as one cohesive
+                 * section rather than as two independently aligned blocks. The
+                 * two `Reveal` wrappers stay separate so the copy still fades in
+                 * before the buttons.
                  */}
-                {owner.customLinksSection?.eyebrow ||
-                owner.customLinksSection?.heading ||
-                owner.customLinksSection?.description ? (
-                  <Reveal>
-                    <CustomLinksSectionHeader copy={owner.customLinksSection} />
+                <div className="pf-links-column">
+                  {owner.customLinksSection?.eyebrow ||
+                  owner.customLinksSection?.heading ||
+                  owner.customLinksSection?.description ? (
+                    <Reveal>
+                      <CustomLinksSectionHeader copy={owner.customLinksSection} />
+                    </Reveal>
+                  ) : null}
+                  <Reveal delay={120}>
+                    <ProfileCustomLinks links={links} />
                   </Reveal>
-                ) : null}
-                <Reveal delay={120}>
-                  <ProfileCustomLinks links={links} />
-                </Reveal>
+                </div>
               </section>
             );
           }

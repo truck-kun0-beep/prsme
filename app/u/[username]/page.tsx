@@ -308,10 +308,16 @@ export default async function PublicProfilePage({
               </header>
             </Reveal>
             {/* Phase 4.5 — Custom Link Buttons, immediately before My Clicks.
-                Renders nothing at all when the profile has no valid buttons. */}
-            <Reveal delay={120}>
-              <ProfileCustomLinks links={owner.customLinks} />
-            </Reveal>
+                Renders nothing at all when the profile has no valid buttons.
+
+                The `.pf-links-column` wrapper matches the one the saved profile
+                renders in `PublicProfileContent`, so the server-rendered demo
+                and the customised profile compose the section identically. */}
+            <div className="pf-links-column">
+              <Reveal delay={120}>
+                <ProfileCustomLinks links={owner.customLinks} />
+              </Reveal>
+            </div>
             <Reveal delay={180}>
               <MyClicksGallery photos={owner.clicks} />
             </Reveal>
