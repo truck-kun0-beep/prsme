@@ -30,6 +30,17 @@ import {
 import { buildDefaultDraft, type ProfileDraft } from "@/lib/profileDraft";
 
 export interface ProfileDraftContextValue {
+  /**
+   * Phase 7 — which persistence backend this draft belongs to.
+   *
+   * `account` means the draft is the signed-in owner's database row; `guest`
+   * means it is this browser's localStorage copy. Panels that talk about
+   * "saved on this device" need to know the difference, because for an account
+   * the truth is "saved to your account".
+   */
+  mode: "guest" | "account";
+  /** The owner's public username, when known. */
+  username: string | null;
   draft: ProfileDraft;
   defaults: ProfileDraft;
   hydrated: boolean;
@@ -51,6 +62,8 @@ export function useProfileDraft(): ProfileDraftContextValue {
   );
 
   return {
+    mode: store.mode,
+    username: store.username,
     draft: store.draft,
     defaults,
     hydrated: store.hydrated,

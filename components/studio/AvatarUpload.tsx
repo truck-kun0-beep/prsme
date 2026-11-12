@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Palette } from "@/lib/noirProfile";
 import { IconTrash } from "./StudioIcons";
 
@@ -14,6 +14,18 @@ interface Props {
   palettes: Palette[];
   onAvatarChange: (next: string | null) => void;
   onPaletteChange: (palette: Palette) => void;
+  /**
+   * Phase 7 — when the Studio is backed by a signed-in account, the avatar is
+   * uploaded to the private Supabase bucket instead of being kept as a data
+   * URL in `localStorage`.
+   *
+   * The two paths are genuinely different products: a data URL is dropped by
+   * `toStoredProfileState` (it is never persisted), so an account owner would
+   * silently lose their picture on every save. The account path therefore
+   * uploads to `/api/profile/avatar`, which writes `profiles.avatar_path` and
+   * mints short-lived signed URLs on read.
+   */
+  uploadToAccount?: boolean;
 }
 
 export function AvatarUpload({
@@ -22,10 +34,43 @@ export function AvatarUpload({
   palettes,
   onAvatarChange,
   onPaletteChange,
+  uploadToAccount = false,
 }: Props) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [working, setWorking] = useState(false);
+
+  /*
+   * The account path shows the CURRENT avatar, which lives in the private
+   * bucket and is not part of the draft. The signed URL is fetched separately
+   * and never written into the draft.
+   */
+  const [remoteUrl, setRemoteUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!uploadToAccount) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const response = await fetch("/api/profile/avatar-url", {
+          method: "POST",
+          cache: "no-store",
+        });
+        if (!response.ok) return;
+        const payload = (await response.json()) as { url?: string };
+        if (!cancelled && typeof payload.url === "string") {
+          setRemoteUrl(payload.url);
+        }
+      } catch {
+        /* no avatar, or the request failed — the palette fallback stands */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [uploadToAccount]);
+
+  const shown = dataUrl ?? remoteUrl;
 
   async function handleFile(file: File) {
     setError(null);
@@ -39,6 +84,10 @@ export function AvatarUpload({
     }
     setWorking(true);
     try {
+      if (uploadToAccount) {
+        await uploadToAccountBucket(file);
+        return;
+      }
       const dataUrl = await readAsDataUrl(file);
       const compressed = await compressImage(dataUrl, MAX_DIM, JPEG_QUALITY);
       if (compressed.length > MAX_DATA_URL_LENGTH) {
@@ -56,15 +105,57 @@ export function AvatarUpload({
     }
   }
 
+  /*
+   * Upload to the private bucket.
+   *
+   * The file is sent as multipart to `/api/profile/avatar`, which stores it
+   * and points `profiles.avatar_path` at it in one request. The response
+   * carries only the path; the image is then re-read through the signed-URL
+   * route so the preview shows the stored object rather than a local copy.
+   */
+  async function uploadToAccountBucket(file: File) {
+    const form = new FormData();
+    form.append("avatar", file);
+    try {
+      const response = await fetch("/api/profile/avatar", {
+        method: "POST",
+        body: form,
+      });
+      const payload = (await response.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+      };
+      if (!response.ok || !payload.ok) {
+        setError(payload.error ?? "Couldn't upload the avatar.");
+        return;
+      }
+      // Re-read the stored object through the signed-URL route.
+      const signed = await fetch("/api/profile/avatar-url", {
+        method: "POST",
+        cache: "no-store",
+      });
+      if (signed.ok) {
+        const signedPayload = (await signed.json()) as { url?: string };
+        if (typeof signedPayload.url === "string") setRemoteUrl(signedPayload.url);
+      }
+      setError(null);
+      onAvatarChange(null);
+    } catch {
+      setError("Network error — your avatar wasn't uploaded.");
+    } finally {
+      setWorking(false);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
       {/* Preview + drop */}
       <div className="flex flex-col items-start gap-3">
         <div className="relative h-24 w-24 overflow-hidden rounded-full border border-[var(--line-strong)] bg-[var(--surface-2)]">
-          {dataUrl ? (
+          {shown ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={dataUrl}
+              src={shown}
               alt="Uploaded avatar preview"
               className="h-full w-full object-cover"
             />
@@ -80,9 +171,9 @@ export function AvatarUpload({
             className="rounded-md border border-[var(--line-strong)] bg-[var(--surface-2)] px-3 py-1.5 text-[12px] font-medium text-[var(--text-default)] hover:bg-[var(--surface-3)] disabled:opacity-50"
             data-testid="studio-avatar-pick-btn"
           >
-            {working ? "Working…" : dataUrl ? "Replace image" : "Upload image"}
+            {working ? "Working…" : shown ? "Replace image" : "Upload image"}
           </button>
-          {dataUrl && (
+          {shown && !uploadToAccount && (
             <button
               type="button"
               onClick={() => onAvatarChange(null)}
@@ -148,8 +239,9 @@ export function AvatarUpload({
         )}
         {!error && (
           <p className="text-[11px] text-[var(--text-muted)]">
-            We resize to {MAX_DIM}px, recompress as JPEG, and store the data URL
-            in this browser&apos;s localStorage only.
+            {uploadToAccount
+              ? "Your image is stored privately in your account and appears on your public profile."
+              : `We resize to ${MAX_DIM}px, recompress as JPEG, and store the data URL in this browser's localStorage only.`}
           </p>
         )}
       </div>

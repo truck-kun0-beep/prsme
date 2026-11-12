@@ -15,6 +15,8 @@ import { isKnownProfile, noirProfile } from "@/lib/noirProfile";
 import { getProfileByUsername } from "@/lib/supabase/profiles";
 import { listPublishedReviews } from "@/lib/supabase/reviews";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { getServerClient } from "@/lib/supabase/server";
+import { createAvatarUrl } from "@/lib/supabase/avatar";
 import { DatabaseProfile } from "@/components/auth/DatabaseProfile";
 
 interface Params {
@@ -136,6 +138,28 @@ export default async function PublicProfilePage({
      */
     const reviews = await listPublishedReviews({ authorId: record.userId });
 
+    /*
+     * Phase 7 — the owner's uploaded avatar.
+     *
+     * The `avatars` bucket is private, so the bytes are addressed by a
+     * short-lived signed URL rather than a public path. It is minted HERE, on
+     * the server, for this request only — never persisted, never written into
+     * `profile_state`, and never sent to a client that is not allowed to see
+     * this profile (a private profile the visitor does not own never reaches
+     * this point; the route 404s first).
+     *
+     * A failure to sign is not fatal: the renderer falls back to the
+     * generative palette avatar, which is what a profile without an uploaded
+     * avatar shows anyway.
+     */
+    let avatarUrl: string | null = null;
+    if (record.avatarPath) {
+      const supabase = await getServerClient({ canSetCookies: false });
+      if (supabase) {
+        avatarUrl = await createAvatarUrl(supabase, record.avatarPath);
+      }
+    }
+
     return (
       <>
         <SiteNav />
@@ -145,7 +169,12 @@ export default async function PublicProfilePage({
            * the same typed draft — so a saved public profile cannot drift from
            * what its owner sees while editing it.
            */}
-          <DatabaseProfile draft={record.draft} reviews={reviews} />
+          <DatabaseProfile
+            draft={record.draft}
+            reviews={reviews}
+            avatarUrl={avatarUrl}
+            username={record.username}
+          />
         </main>
         <SiteFooter />
       </>

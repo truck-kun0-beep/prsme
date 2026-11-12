@@ -43,7 +43,18 @@ export function buildEffectiveOwner(
 
   // Identity
   const identity = {
-    username: defaults.username, // username is locked to "noir" in Phase 3
+    /*
+     * Phase 7 — the username now comes from the draft rather than the demo.
+     *
+     * It was pinned to the demo's "noir" while the profile was local-only. Now
+     * that a profile belongs to an account, `fromStoredProfileState` writes the
+     * `profiles.username` COLUMN into the draft, so reading it back here is
+     * what makes a database profile show its own handle instead of "noir".
+     *
+     * The demo still resolves to "noir" — its draft carries that value — so
+     * the fictional profile is unchanged.
+     */
+    username: draft.identity.username.trim() || defaults.username,
     displayName: draft.identity.displayName.trim() || defaults.displayName,
     bio: draft.identity.bio.trim() || defaults.bio,
     location: draft.identity.location.trim() || undefined,

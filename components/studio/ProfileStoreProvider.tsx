@@ -87,6 +87,17 @@ export function ProfileStoreProvider({ children }: { children: ReactNode }) {
   const [mode, setMode] = useState<"guest" | "account">("guest");
 
   /*
+   * The `updated_at` of the row this draft was loaded from.
+   *
+   * Phase 7 — this is what makes the server's optimistic-concurrency guard
+   * reachable. The API compares the value the client loaded against the row's
+   * current `updated_at` and refuses the write with a 409 if the row moved on.
+   * Without sending it, that guard never fires and two Studio tabs silently
+   * overwrite each other.
+   */
+  const [serverUpdatedAt, setServerUpdatedAt] = useState<string | null>(null);
+
+  /*
    * Monotonic save revision.
    *
    * Every save takes a ticket; only a response whose ticket is still the
@@ -174,6 +185,9 @@ export function ProfileStoreProvider({ children }: { children: ReactNode }) {
             setLastSavedAt(Date.now());
           }
           if (typeof payload.username === "string") setUsername(payload.username);
+          if (typeof payload.updatedAt === "string") {
+            setServerUpdatedAt(payload.updatedAt);
+          }
           setHydrated(true);
         }
       } catch {
@@ -284,6 +298,16 @@ export function ProfileStoreProvider({ children }: { children: ReactNode }) {
         body: JSON.stringify({
           draft,
           visibility: draft.visibility === "public" ? "public" : "private",
+          /*
+           * Phase 7 — the optimistic-concurrency token.
+           *
+           * The server compares this against the row's current `updated_at`
+           * and refuses the write with a 409 if the profile was changed
+           * elsewhere (another tab, another device) since this draft was
+           * loaded. Sending it is what turns that guard from dead code into
+           * a real protection against silently losing an edit.
+           */
+          expectedUpdatedAt: serverUpdatedAt ?? undefined,
         }),
       });
 
@@ -291,6 +315,8 @@ export function ProfileStoreProvider({ children }: { children: ReactNode }) {
         ok?: boolean;
         error?: string;
         username?: string;
+        updatedAt?: string;
+        conflict?: boolean;
       };
 
       // A superseded response must not report success or failure.
@@ -300,6 +326,12 @@ export function ProfileStoreProvider({ children }: { children: ReactNode }) {
         const message = payload.error ?? "Could not save.";
         setLastError(message);
         setPhase("error");
+        /*
+         * Phase 7 — a conflict means the row moved on. Adopting the server's
+         * timestamp as the new baseline would let the next save overwrite the
+         * other edit, so the token is deliberately NOT advanced here: the owner
+         * is told to reload, and a reload re-reads the row and its timestamp.
+         */
         return { ok: false, error: message };
       }
 
@@ -307,6 +339,15 @@ export function ProfileStoreProvider({ children }: { children: ReactNode }) {
       setLastSavedAt(now);
       setPhase("saved");
       if (typeof payload.username === "string") setUsername(payload.username);
+      /*
+       * The server returns the row's NEW `updated_at`. Adopting it is what
+       * keeps the next save's concurrency token current — otherwise the
+       * second save would compare against the timestamp from the first load
+       * and be rejected as a false conflict.
+       */
+      if (typeof payload.updatedAt === "string") {
+        setServerUpdatedAt(payload.updatedAt);
+      }
       return { ok: true, savedAt: now };
     } catch {
       if (ticket === saveTicket.current) {
@@ -315,7 +356,7 @@ export function ProfileStoreProvider({ children }: { children: ReactNode }) {
       }
       return { ok: false, error: "Network error." };
     }
-  }, [draft, mode]);
+  }, [draft, mode, serverUpdatedAt]);
 
   const dirty = phase === "unsaved" || phase === "saving";
 

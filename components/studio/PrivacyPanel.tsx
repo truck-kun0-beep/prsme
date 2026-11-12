@@ -35,18 +35,38 @@ const OPTIONS: Array<{
 ];
 
 export function PrivacyPanel() {
-  const { draft, update } = useProfileDraft();
+  const { draft, update, mode } = useProfileDraft();
+  const isAccount = mode === "account";
   const value = draft.visibility ?? "public";
+
+  /*
+   * Phase 7 — the database supports exactly two visibilities.
+   *
+   * `profiles.visibility` has a CHECK constraint of ('public', 'private'), and
+   * the save path maps anything that is not "public" to "private". Offering
+   * "Followers only" to an account owner would therefore silently publish a
+   * PRIVATE profile while the UI claimed a middle tier that does not exist.
+   *
+   * The option is hidden in account mode. Guests keep the full local-only
+   * list, because nothing they pick reaches the database at all.
+   */
+  const options = isAccount
+    ? OPTIONS.filter((o) => o.id !== "followers")
+    : OPTIONS;
 
   return (
     <div className="space-y-4">
       <PanelCard
         testId="studio-privacy-visibility"
         title="Profile visibility"
-        description="Local preview setting. Server-side enforcement arrives with the authenticated backend."
+        description={
+          isAccount
+            ? "Who can see your profile. This is enforced on the server, not just hidden in the browser."
+            : "Local preview setting. Server-side enforcement arrives with the authenticated backend."
+        }
       >
         <div className="space-y-2">
-          {OPTIONS.map((o) => {
+          {options.map((o) => {
             const active = value === o.id;
             const Icon = o.icon;
             return (

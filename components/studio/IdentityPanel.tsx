@@ -39,7 +39,8 @@ const SOCIAL_LABELS: Record<SocialPlatform, { platform: string; placeholder: str
 const PALETTE_OPTIONS: Palette[] = Array.from(PALETTE_NAMES) as Palette[];
 
 export function IdentityPanel() {
-  const { draft, defaults, update } = useProfileDraft();
+  const { draft, defaults, update, mode } = useProfileDraft();
+  const isAccount = mode === "account";
   const id = draft.identity;
 
   const setIdentity = (patch: Partial<typeof id>) =>
@@ -247,7 +248,11 @@ export function IdentityPanel() {
       <PanelCard
         testId="studio-identity-avatar"
         title="Avatar"
-        description="One image per profile. We resize your upload to 320px and store it locally in this browser."
+        description={
+          isAccount
+            ? "One image per profile. We resize your upload to 320px and store it privately in your account."
+            : "One image per profile. We resize your upload to 320px and store it locally in this browser."
+        }
       >
         <AvatarUpload
           dataUrl={draft.avatarDataUrl}
@@ -255,6 +260,7 @@ export function IdentityPanel() {
           onAvatarChange={(next) => update({ avatarDataUrl: next })}
           onPaletteChange={setPalette}
           palettes={PALETTE_OPTIONS}
+          uploadToAccount={isAccount}
         />
       </PanelCard>
     </div>

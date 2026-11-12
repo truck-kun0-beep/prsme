@@ -39,10 +39,20 @@ const VIEWPORT_WIDTHS: Record<Exclude<PreviewViewport, "fill">, number> = {
 };
 
 export function LivePreviewFrame() {
-  const { draft, hydrated } = useProfileDraft();
+  const { draft, hydrated, mode, username } = useProfileDraft();
   const [viewport, setViewport] = useState<PreviewViewport>("390");
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const [frameReady, setFrameReady] = useState(false);
+
+  /*
+   * Phase 7 — point "Open preview" at the owner's OWN profile when there is
+   * one. The iframe always renders the live draft (via postMessage), but the
+   * button opens a real tab, and for an account owner that tab should show
+   * the profile that will actually be published.
+   */
+  const isAccount = mode === "account";
+  const openHref = isAccount && username ? `/u/${username}` : "/u/noir";
+  const previewLabel = isAccount && username ? `@${username}` : "@noir";
 
   /* ---------------- Push the live draft into the frame ---------------- */
   useEffect(() => {
@@ -96,7 +106,7 @@ export function LivePreviewFrame() {
       {/* Toolbar — sits in the studio shell, never over the preview. */}
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-iris-300">
-          Live preview · @noir
+          Live preview · {previewLabel}
         </p>
 
         <div className="flex flex-wrap items-center gap-1.5">
@@ -124,7 +134,7 @@ export function LivePreviewFrame() {
           </div>
 
           <Link
-            href="/u/noir"
+            href={openHref}
             target="_blank"
             rel="noopener noreferrer"
             className="ml-1 inline-flex items-center gap-1 rounded-md border border-[var(--line-soft)] bg-[var(--surface-2)] px-2 py-1 text-[11px] font-medium text-[var(--text-default)] hover:border-[var(--line-strong)] hover:text-[var(--text-strong)]"

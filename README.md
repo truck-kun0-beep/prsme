@@ -1437,6 +1437,288 @@ project, and the project's database password. Neither can be supplied from
 this session, and neither should be pasted into chat.
 
 ---
+
+## Phase 6.3 — verifying the live Supabase integration
+
+The nine migrations are now applied to the real PRSME project
+`dmuvbiojelzojeqvrcli`, and the existing implementation has been verified
+against it. No new features were added; this phase only proved what was
+already built.
+
+### The blocker that had to be cleared first
+
+The project was **paused**. The Management API reported
+`status: "INACTIVE"`, the api-keys list was empty, and
+`dmuvbiojelzojeqvrcli.supabase.co` returned `NXDOMAIN` from the
+authoritative nameserver — the same answer a deliberately bogus host gets, so
+the name was absent rather than merely unreachable.
+
+That is why the Phase 5 suite's live section failed with `TypeError: fetch
+failed` and the Phase 6 suite's live section failed with
+`PGRST205 — Could not find the table in the schema cache`. Neither failure
+was a defect in the schema; the project simply had no running services.
+
+`POST /v1/projects/<ref>/restore` brought it back:
+
+```
+status  INACTIVE  ->  COMING_UP  ->  RESTORING  ->  ACTIVE_HEALTHY
+```
+
+`GET /v1/projects/<ref>/health?services=db,auth,storage,rest` then reported
+every service `ACTIVE_HEALTHY` — `db`, `auth` (GoTrue v2.197.0), `storage`
+and `rest`.
+
+### What the CLI says about the migration chain
+
+```
+$ supabase migration list --linked
+Local            | Remote           | Time (UTC)
+  ------------------|------------------|-----------------------
+   `20250101000001` | `20250101000001` | `2025-01-01 00:00:01`
+   … through `20250101000009`
+
+$ supabase db push --linked --dry-run
+Remote database is up to date.
+```
+
+All nine local migrations are applied remotely, in order, with no drift.
+
+### The suites, against the live project
+
+| Suite | Command | Result |
+| --- | --- | --- |
+| Phase 5 — authentication and profiles | `npm run test:phase5 -- --with-db` | **35 passed, 0 failed, 0 skipped** |
+| Phase 6 — media catalogue and reviews | `npm run test:phase6 -- --with-db` | **93 passed, 0 failed, 0 skipped** |
+| Phase 6 — policy-level SQL assertions | `npm run test:phase6:remote-sql` | **21 passed, 0 failed** |
+| TypeScript | `npm run typecheck` | clean |
+| Lint | `npm run lint` | no warnings, no errors |
+| Production build | `npm run build` | compiled successfully, 25 routes |
+
+The Phase 5 and Phase 6 suites each load `.env.local` themselves, so both
+run against the live project with no further setup. Their live sections
+exercise the denied paths as well as the permitted ones: an anonymous insert
+into `profiles`, into `media_reviews` and into `media_items` is refused; an
+anonymous upload to the `avatars` bucket is refused; an anonymous `UPDATE`
+of a catalogue record changes nothing; and the catalogue and the aggregate
+view are readable.
+
+### The policy-level assertions
+
+`scripts/phase6-sql-tests.sql` is the layer the HTTP suites cannot reach: it
+reads through RLS as `anon`, as a signed-in author, and as a second
+unrelated account, from inside the database. It is now run against the remote
+project by `scripts/phase63-remote-sql-tests.mjs`:
+
+```
+npm run test:phase6:remote-sql
+```
+
+Every assertion in that file goes through `phase6_sql_test.assert()`, which
+raises when the condition is not true, so each unit settles its own question:
+a submission that returns 201 held; one that returns 400 failed, and the
+error message carries the assertion's label.
+
+All 21 assertions pass against the live database:
+
+| Assertion | Covers |
+| --- | --- |
+| a provider identity may only be catalogued once | the `media_items` unique constraint |
+| the first review for an author and a work is accepted | the write path |
+| one author may hold only one review per work | the `media_reviews` unique constraint |
+| the database stamps `published_at` when a review is published | the publication trigger |
+| a review that returns to draft has no publication timestamp | the trigger in reverse |
+| `can_read_review`: a published review is readable | the helper's positive branch |
+| `can_read_review`: a draft is not readable by a stranger | the helper's negative branch |
+| `can_read_review`: a published review by a PRIVATE profile is not readable | the privacy interlock |
+| anon: may read only the one published review in this fixture | the `anon` SELECT policy |
+| authenticated: the author may read the review | the owner branch |
+| authenticated: a second user may read another public author's review | the published-and-public branch |
+| authenticated: a second user may NOT read a private-profile author's review | the privacy interlock under a signed-in role |
+| authenticated: a private-profile author's review is invisible to another account | the same, read through the policy |
+| authenticated: a private-profile author may still read their own review | the owner branch under a private profile |
+| authenticated: a second user starts with no reviews | isolation between accounts |
+| the aggregate counts the one written review | `media_review_stats` as a reader |
+| the aggregate counts the author's own written review | the same, as the author |
+| anon: the aggregate view is readable | the view's grant |
+| the aggregate excludes a private-profile author's review for a stranger | the `security_invoker` side channel |
+| a foreign key joins `media_reviews` to `profiles` | the PostgREST embed key |
+| every review has a matching profile row | referential integrity |
+
+#### How the runner reaches the database
+
+The project's `db` host resolves to an IPv6 address only, and this machine
+has no IPv6 route to it, so a direct Postgres session is not available here.
+The runner uses the Management API's database query endpoint instead, and
+verifies before relying on it that the endpoint preserves the two semantics
+these assertions depend on:
+
+- a `set local role anon` inside a transaction really does filter the rows —
+  the anon view saw 1 profile where the superuser view saw 2, with a private
+  profile in the database;
+- an explicit `rollback;` really does discard that submission's writes —
+  a row inserted and rolled back inside one submission was gone afterwards,
+  while the same insert without transaction control persisted.
+
+The endpoint runs as `postgres`, which bypasses RLS. That is exactly why the
+file's role switches matter, and why they are exercised rather than assumed.
+
+The access token is read from `SUPABASE_ACCESS_TOKEN` when it is set, and
+otherwise from the Windows Credential Manager entry the Supabase CLI itself
+uses. It is never printed, never written to a file, and never passed on a
+command line.
+
+### The database was left as it was found
+
+The test file creates its own fixtures and deletes them at the end. After the
+run the remote database holds exactly one account — the project owner's — one
+public profile, and no catalogue or review rows.
+
+### Still requires a human
+
+The Phase 5 suite's own note stands, and it is unchanged by this phase:
+**registration → email confirmation → onboarding → save → sign-in on a second
+device** needs interactive credentials and cannot be automated from a script.
+It was not performed here and is not claimed.
+
+Two further items are the project owner's, not the code's:
+
+- **The project must not be paused again.** A paused Supabase project removes
+  its DNS records and its API keys, which makes every live suite fail in a
+  way that looks like a schema fault rather than an outage. The Phase 6.3
+  failure mode was exactly that.
+- **IPv6 is required for a direct database connection from this machine.** The
+  project's `db` host is IPv6-only here, so `pg` cannot reach it and the
+  Management API's query endpoint is the working path.
+
+---
+---
+
+---
+
+## Phase 7 — The saved profile, verified end to end
+
+Phase 5 built the account-backed profile and Phase 6.3 proved the database
+exists. Phase 7 proves the thing a user actually cares about: **the profile you
+saved in the Studio is the profile that comes back** — in the same browser, in
+a completely separate browser, and on a device that never saw the draft.
+
+No new features. This phase verifies the existing implementation against the
+live project `dmuvbiojelzojeqvrcli`.
+
+### What is verified
+
+`scripts/phase7-verify.mjs` runs 64 assertions against the live project. It
+covers the whole path, not just the happy one:
+
+| Group | What it proves |
+| --- | --- |
+| A. Schema and RLS | The `is_username_taken` RPC is callable; anonymous `INSERT` into `profiles` is refused; anonymous `SELECT` returns only public profiles; anonymous upload to the `avatars` bucket is refused. |
+| B. Two accounts | Two independent accounts exist at once, each with its own session. |
+| C. Ownership | An owner can create and read their own profile; a second account can neither read a private profile, update it, nor reassign it to itself. |
+| D. The API round trip | An anonymous `POST /api/profile` is refused with 401; the owner can save; every part of the saved draft comes back — identity, bio, location, pronouns, tags, socials, theme, typography, layout, accent, collection order and visibility, media items, soundtrack, custom-link copy and buttons, My Clicks, section order and section visibility. |
+| E. Stale writes | A save carrying an old `updatedAt` is refused with 409 and reported as a conflict; a save carrying the current one succeeds. |
+| F. Server-side validation | A crafted draft is repaired rather than trusted — an oversized display name is clamped to 120 characters, a `javascript:` link is dropped — and the good draft is restored afterwards. |
+| F2. The public page | The public profile renders the owner's real name, username, links, collection and soundtrack, and never the demo's handle. A private profile is a 404 for a stranger and a 200 for its owner; an unknown username is a 404; `/u/noir` still resolves. |
+| G. Two clients | A second client reads the same state, writes to it, and the first client sees that write. |
+| H. Visibility | The owner can make the profile private; a second account and an anonymous visitor are then both refused; making it public restores the anonymous read. |
+| Cleanup | The test profile and both test accounts are deleted, and the suite asserts nothing is left behind. |
+
+`scripts/phase7-cross-browser.mjs` then proves the cross-device claim with a
+**second Edge instance** on its own CDP port with its own user-data-dir: it
+asserts the second browser starts with no `localStorage` copy of the profile,
+that its Studio loads the *saved* state rather than a blank one, that an edit
+made there is visible to the first browser, and that the public profile in the
+second browser shows the saved customization. 22 assertions.
+
+### Running it
+
+```bash
+npm run test:phase7
+npm run test:phase7:cross-browser
+```
+
+The cross-browser suite needs the app served on port 3100 and a Chromium with
+CDP on 9334:
+
+```bash
+npm run build && npm run start -- -p 3100
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/launch-browser.ps1
+```
+
+### The blocker that had to be cleared first — again
+
+The project was **paused** when this phase started, exactly as it had been
+during Phase 6.3. A paused project removes its DNS records and its API keys,
+so every call failed with `TypeError: fetch failed` and
+`getaddrinfo ENOTFOUND` — a shape that looks like an application fault and is
+actually an outage.
+
+`scripts/supabase-restore.mjs` now handles this, so it is a command rather
+than a remembered incantation:
+
+```bash
+npm run supabase:restore
+```
+
+It reads the project's status from the Management API, requests a restore if
+the project is not active, waits for the services to come back, prints the
+per-service health, and then checks that all nine migrations are still
+applied. A restore takes a few minutes — the project passed through
+`COMING_UP` and `RESTORING` before reaching `ACTIVE_HEALTHY`.
+
+### The second blocker: the test account cannot be signed up for
+
+The project's public sign-up path cannot produce a usable test account. It
+rejects the throwaway addresses (`Email address "…" is invalid`), it requires
+email confirmation, and it rate-limits (`email rate limit exceeded`). An
+unattended run therefore never gets a session, and every account-scoped
+assertion after that point would be untested.
+
+The suites now create the throwaway account through the **admin endpoint** as
+already confirmed, and then sign in through the **ordinary password path**:
+
+```js
+await admin.auth.admin.createUser({ email, password, email_confirm: true });
+await client.auth.signInWithPassword({ email, password });
+```
+
+That keeps the thing under test honest. The session, its JWT claims, and the
+RLS policies it is subject to are all genuinely exercised — only the email
+delivery is skipped. The admin key is read from `SUPABASE_SERVICE_ROLE_KEY` or
+from the Management API, is used **only** to provision and remove the accounts,
+and never makes an assertion. The app code itself still contains no
+service-role key, which the Phase 5 suite asserts statically.
+
+### Credentials
+
+Both helpers read the Supabase access token from `SUPABASE_ACCESS_TOKEN` when
+it is set, and otherwise from the Windows Credential Manager entry the
+Supabase CLI itself writes. The token is never printed, never written to a
+file, and never passed on a command line. `scripts/supabase-access-token.mjs`
+holds that logic once, for both helpers.
+
+### The database was left as it was found
+
+Both suites delete their accounts and their profile rows when they finish. After
+the run the remote database holds exactly one account — the project owner's —
+one public profile, and no catalogue or review rows.
+
+### Phase 7 limits, stated honestly
+
+- **Sign-up itself is still not covered end to end.** The suites exercise
+  sign-in and everything downstream of it, but the public sign-up path —
+  including the email-confirmation branch — is not automated. It cannot be:
+  the project requires confirmation and rate-limits.
+- **No realtime broadcast.** A signed-in owner editing in two tabs is protected
+  by the `updated_at` conflict check (the second save gets a 409), but the
+  other tab does not update on its own. This is unchanged from Phase 5.
+- **The project must not be paused again.** Every live suite fails in a way
+  that looks like a schema fault rather than an outage. `npm run
+  supabase:restore` is the fix, but it needs the Management API token.
+- **A direct database connection is not available from this machine.** The
+  project's `db` host resolves to IPv6 only, so `pg` cannot reach it and the
+  Management API's query endpoint is the working path — as it was in Phase 6.3.
+
 ---
 
 ## Local development

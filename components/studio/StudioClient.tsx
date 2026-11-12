@@ -72,14 +72,34 @@ function StudioBootShell() {
 }
 
 function StudioShell() {
-  const { draft, hydrated, dirty, lastSavedAt, lastError, save, reset } =
-    useProfileDraft();
+  const {
+    draft,
+    hydrated,
+    dirty,
+    lastSavedAt,
+    lastError,
+    save,
+    reset,
+    mode,
+    username,
+  } = useProfileDraft();
   const [activePanel, setActivePanel] = useState<PanelId>("appearance");
   const [resetOpen, setResetOpen] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
   const [mobileView, setMobileView] = useState<"controls" | "preview">(
     "controls",
   );
+
+  const isAccount = mode === "account";
+
+  /*
+   * Where "Back to profile" and "Open preview" should point.
+   *
+   * For a guest that is the fictional demo. For a signed-in owner it is their
+   * OWN public profile — the Studio header says "Editing @someone", and the
+   * obvious next click is to look at that profile, not at Noir's.
+   */
+  const profileHref = isAccount && username ? `/u/${username}` : "/u/noir";
 
   // Apply saved theme so the studio chrome reflects the current draft.
   useThemeMount(draft.appearance);
@@ -124,13 +144,37 @@ function StudioShell() {
   const statusText = useMemo(() => {
     if (lastError) return lastError;
     if (!hydrated) return "Loading…";
-    if (savedFlash) return "Saved on this device.";
+    if (savedFlash) return isAccount ? "Saved to your account." : "Saved on this device.";
     if (dirty) return "Unsaved changes";
     if (lastSavedAt) {
-      return `Saved on this device.`;
+      return isAccount ? "Saved to your account." : "Saved on this device.";
     }
     return "Ready to customize.";
-  }, [hydrated, dirty, lastSavedAt, lastError, savedFlash]);
+  }, [hydrated, dirty, lastSavedAt, lastError, savedFlash, isAccount]);
+
+  /*
+   * Phase 7 — prevent accidental loss of edits.
+   *
+   * An unsaved Studio edit lives only in memory. Closing the tab, reloading,
+   * or navigating away would discard it with no warning, which is exactly the
+   * failure the brief asks to prevent. `beforeunload` is the only hook that
+   * covers every exit path — including a browser tab close, which no click
+   * handler can intercept.
+   *
+   * The prompt text itself is ignored by modern browsers (they show their own
+   * generic wording), but the *presence* of the listener is what makes the
+   * browser ask. It is registered only while there is something to lose.
+   */
+  useEffect(() => {
+    if (!dirty) return;
+    function onBeforeUnload(event: BeforeUnloadEvent) {
+      event.preventDefault();
+      // Legacy browsers need returnValue set to trigger the dialog.
+      event.returnValue = "";
+    }
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [dirty]);
 
   return (
     <div className="min-h-dvh">
@@ -139,14 +183,20 @@ function StudioShell() {
         <div className="container-page flex h-14 items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-3">
             <Link
-              href="/u/noir"
+              href={profileHref}
               className="inline-flex items-center gap-2 rounded-md border border-[var(--line-soft)] bg-[var(--surface-2)] px-2.5 py-1.5 text-[12px] font-medium text-[var(--text-default)] transition-colors hover:border-[var(--line-strong)] hover:text-[var(--text-strong)]"
-              aria-label="Return to public profile preview"
+              aria-label={
+                isAccount
+                  ? "Return to your public profile"
+                  : "Return to public profile preview"
+              }
             >
               <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden>
                 <path d="M14 7 L8 12 L14 17" />
               </svg>
-              <span className="hidden sm:inline">Back to profile</span>
+              <span className="hidden sm:inline">
+                {isAccount ? "Your profile" : "Back to profile"}
+              </span>
             </Link>
             <div className="min-w-0">
               <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-iris-300">
@@ -298,12 +348,12 @@ function StudioShell() {
                 id="studio-reset-title"
                 className="font-display text-xl text-[var(--text-strong)]"
               >
-                Reset demo profile?
+                {isAccount ? "Reset your profile?" : "Reset demo profile?"}
               </h2>
               <p className="mt-2 text-[13px] leading-relaxed text-[var(--text-muted)]">
-                This restores the original Noir profile and appearance. Any
-                customizations saved on this device will be cleared from local
-                storage. You can&apos;t undo this.
+                {isAccount
+                  ? "This clears your collections, links, soundtrack, and clicks back to an empty profile. Your display name, username, and avatar stay as they are. Press Save to make it permanent — nothing is written to your account until you do."
+                  : "This restores the original Noir profile and appearance. Any customizations saved on this device will be cleared from local storage. You can't undo this."}
               </p>
               <div className="mt-5 flex items-center justify-end gap-2">
                 <button
@@ -320,7 +370,7 @@ function StudioShell() {
                   data-testid="studio-reset-confirm-btn"
                 >
                   <IconCheck size={14} />
-                  Yes, reset demo
+                  {isAccount ? "Yes, reset profile" : "Yes, reset demo"}
                 </button>
               </div>
             </div>
