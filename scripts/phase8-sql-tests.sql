@@ -1330,6 +1330,71 @@ select phase8_sql_test.assert(
 );
 
 rollback;
+-- The POSTING RATE LIMIT.
+--
+-- A burst of comments from ONE account is refused. The limit is per AUTHOR,
+-- not per profile, because the thing being prevented is one account spraying
+-- comments across many profiles — a per-profile limit would let exactly that
+-- through.
+--
+-- The guard is a TRIGGER, so it fires for every insert whoever makes it,
+-- including a crafted PostgREST request that never touches this
+-- application's code. An application-only limit would bound the
+-- application's own users and nobody else, because the published key is
+-- public.
+--
+begin;
+set local role authenticated;
+
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"c3333333-3333-3333-3333-333333333333","role":"authenticated"}',
+  true
+);
+
+-- The author posts comments until the limit refuses one.
+--
+-- The count is driven by the limit itself rather than a hard-coded number, so
+-- a change to the limit does not silently invalidate the assertion.
+do $probe$
+declare
+  limit_value integer := public.comment_rate_limit();
+  posted integer := 0;
+  refused boolean := false;
+begin
+  for i in 1..(limit_value + 2) loop
+    begin
+      insert into public.profile_comments (author_id, profile_id, body)
+      values (
+        'c3333333-3333-3333-3333-333333333333',
+        'a1111111-1111-1111-1111-111111111111',
+        'Burst ' || i
+      );
+      posted := posted + 1;
+    exception when others then
+      refused := true;
+      exit;
+    end;
+  end loop;
+
+  if not refused then
+    raise exception 'the comment rate limit did NOT refuse a burst';
+  end if;
+
+  if posted > limit_value then
+    raise exception 'the comment rate limit allowed % comments, over the limit of %',
+      posted, limit_value;
+  end if;
+end;
+$probe$;
+
+select phase8_sql_test.assert(
+  (select count(*) from public.profile_comments
+   where author_id = 'c3333333-3333-3333-3333-333333333333') <= public.comment_rate_limit(),
+  'comments: a burst of comments from one account is refused'
+);
+
+rollback;
 
 -- A caller may not edit or delete somebody else's comment.
 begin;

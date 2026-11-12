@@ -539,6 +539,43 @@ function verifyPrivileges() {
         lock,
       ),
   );
+
+  /*
+   * The comment posting rate limit.
+   *
+   * The limit lives in the DATABASE rather than in the application, because an
+   * application limit is a check in a server function, and a server function
+   * is reachable by anything that can talk to PostgREST — including a crafted
+   * request that never touches this application's code. The published key is
+   * public.
+   */
+  const rate = read("supabase/migrations/20250101000014_comment_rate_limit.sql");
+
+  check(
+    "the comment rate limit is enforced by a TRIGGER, so it fires for every insert",
+    /create trigger profile_comments_rate_limit\s+before insert on public\.profile_comments/i.test(
+      rate,
+    ),
+  );
+  check(
+    "the rate limit is measured per AUTHOR, not per profile",
+    /c\.author_id = new\.author_id/i.test(rate),
+  );
+  check(
+    "the rate-limit trigger function is revoked from every client role",
+    /revoke all on function public\.enforce_comment_rate_limit\(\) from public, anon, authenticated/i.test(
+      rate,
+    ),
+  );
+  check(
+    "the rate limit is turned into a sentence, not a 500",
+    /commenting too quickly/i.test(
+      read("lib/supabase/comments.ts"),
+    ) &&
+      /case "rate-limited":\s*return 429;/i.test(
+        read("app/api/comments/route.ts"),
+      ),
+  );
 }
 
 /**

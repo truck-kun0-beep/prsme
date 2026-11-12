@@ -45,6 +45,8 @@ function statusFor(reason: string): number {
       return 403;
     case "invalid":
       return 400;
+    case "rate-limited":
+      return 429;
     case "not-configured":
       return 503;
     default:

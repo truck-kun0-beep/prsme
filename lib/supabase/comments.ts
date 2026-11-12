@@ -407,8 +407,8 @@ export async function createComment(
   if (error) {
     /*
      * A policy refusal comes back as a Postgres error with the message from
-     * the RLS check. The three cases a caller can actually hit are turned
-     * into sentences here.
+     * the RLS check. The four cases a caller can actually hit are turned into
+     * sentences here.
      */
     const message = error.message ?? "";
 
@@ -418,6 +418,18 @@ export async function createComment(
         reason: "not-allowed",
         message:
           "You can't comment on this profile. Followers of a private profile can comment; anyone can comment on a public one.",
+      };
+    }
+
+    /*
+     * The rate limit. The database refuses a burst, so the refusal arrives
+     * here as the trigger's own message rather than as a policy error.
+     */
+    if (/commenting too quickly/i.test(message)) {
+      return {
+        ok: false,
+        reason: "rate-limited",
+        message: "You're commenting too quickly. Give it a moment and try again.",
       };
     }
 
