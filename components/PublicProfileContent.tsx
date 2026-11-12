@@ -27,7 +27,9 @@ import { ActivityList } from "@/components/ActivityList";
 import { MyClicksGallery } from "@/components/MyClicksGallery";
 import { ProfileCustomLinks, CustomLinksSectionHeader } from "@/components/ProfileCustomLinks";
 import { ProfileReviews } from "@/components/ProfileReviews";
+import { ProfileComments, type CommentItem } from "@/components/social/ProfileComments";
 import type { Review } from "@/lib/supabase/reviews";
+import type { FollowState } from "@/lib/supabase/social";
 import type { ProfileOwner, ProfileCollection } from "@/lib/noirProfile";
 import { noirProfile } from "@/lib/noirProfile";
 import {
@@ -59,6 +61,35 @@ interface PublicProfileContentProps {
    * renders NOTHING — no heading, no empty state, no gap in the page.
    */
   reviews?: Review[];
+  /**
+   * Phase 8 — the real social state for a REGISTERED profile.
+   *
+   * Absent for the demo profile at `/u/noir`, which has no accounts and keeps
+   * its fictional counts. The two are never mixed: a demo count beside a real
+   * Follow button would be a lie.
+   */
+  social?: {
+    followerCount: number;
+    followingCount: number;
+    state: FollowState;
+    isSelf: boolean;
+    blocked: boolean;
+    /** Whether the profile is private. Decided by the database. */
+    isPrivate: boolean;
+  };
+  /**
+   * Phase 8 — the comments section.
+   *
+   * Absent when there is no database-backed comment list to show. The demo
+   * profile has no comments, and a registered profile whose comments are
+   * disabled or unreadable gets no section at all.
+   */
+  comments?: {
+    items: CommentItem[];
+    nextOffset: number | null;
+    canComment: boolean;
+    commentDisabledReason?: string;
+  };
 }
 
 export function PublicProfileContent({
@@ -66,6 +97,8 @@ export function PublicProfileContent({
   draft = null,
   respectSectionVisibility = true,
   reviews = [],
+  social,
+  comments,
 }: PublicProfileContentProps) {
   const visibleSections: Set<SectionId> =
     respectSectionVisibility && draft
@@ -100,7 +133,7 @@ export function PublicProfileContent({
     <div className="pf-document">
       <SiteNav />
       <main id="main" className="pb-16">
-        <ProfileHeader owner={owner} />
+        <ProfileHeader owner={owner} social={social} showSafetyControls={Boolean(social)} />
 
         {order.map((id) => {
           if (!visibleSections.has(id)) return null;
@@ -321,6 +354,30 @@ export function PublicProfileContent({
         {respectSectionVisibility && draft && draft.visibility === "private" && (
           <DemoPrivateBanner displayName={owner.displayName} />
         )}
+
+        {/*
+         * Phase 8 — the comments section.
+         *
+         * It is rendered AFTER the ordered sections rather than inside them,
+         * because it is not an owner-configurable section: it is driven by the
+         * database, and its presence depends on whether the viewer may see
+         * the profile at all.
+         *
+         * It renders NOTHING when there is no comment list — the demo profile
+         * has none, and a registered profile with no comments gets no heading
+         * and no gap.
+         */}
+        {comments ? (
+          <ProfileComments
+            username={owner.username}
+            displayName={owner.displayName}
+            isPrivate={social?.isPrivate ?? false}
+            initialComments={comments.items}
+            nextOffset={comments.nextOffset}
+            canComment={comments.canComment}
+            commentDisabledReason={comments.commentDisabledReason}
+          />
+        ) : null}
       </main>
       <SiteFooter />
     </div>

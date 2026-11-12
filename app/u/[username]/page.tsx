@@ -18,6 +18,14 @@ import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { getServerClient } from "@/lib/supabase/server";
 import { createAvatarUrl } from "@/lib/supabase/avatar";
 import { DatabaseProfile } from "@/components/auth/DatabaseProfile";
+import {
+  getProfileSocialState,
+  getProfileSummary,
+} from "@/lib/supabase/social";
+import {
+  listProfileComments,
+  canViewerComment,
+} from "@/lib/supabase/comments";
 
 interface Params {
   username: string;
@@ -139,6 +147,34 @@ export default async function PublicProfilePage({
     const reviews = await listPublishedReviews({ authorId: record.userId });
 
     /*
+     * Phase 8 — the social state.
+     *
+     * `getProfileSocialState` reads the counts and the visitor's own
+     * relationship through `profile_summary`, which is the one place that
+     * decides what a visitor may know about a profile. The profile's OWN
+     * visibility comes from the same call, so the renderer never has to
+     * guess whether this is a private profile.
+     */
+    const [socialState, summary] = await Promise.all([
+      getProfileSocialState(key),
+      getProfileSummary(key),
+    ]);
+
+    /*
+     * Phase 8 — the comments.
+     *
+     * The list is readable by the same people who may read the profile, so a
+     * visitor who cannot open a private profile gets no comments either. The
+     * "may I comment" answer comes from the database's `can_comment_on`,
+     * which knows the profile's visibility, the follow state, the block
+     * state, and the owner's comment setting.
+     */
+    const [commentPage, canComment] = await Promise.all([
+      listProfileComments(key),
+      canViewerComment(key),
+    ]);
+
+    /*
      * Phase 7 — the owner's uploaded avatar.
      *
      * The `avatars` bucket is private, so the bytes are addressed by a
@@ -174,6 +210,28 @@ export default async function PublicProfilePage({
             reviews={reviews}
             avatarUrl={avatarUrl}
             username={record.username}
+            social={
+              socialState && summary
+                ? {
+                    followerCount: socialState.followerCount,
+                    followingCount: socialState.followingCount,
+                    state: socialState.state,
+                    isSelf: socialState.isSelf,
+                    blocked: socialState.blocked,
+                    isPrivate: summary.visibility === "private",
+                  }
+                : undefined
+            }
+            comments={{
+              items: commentPage.comments,
+              nextOffset: commentPage.nextOffset,
+              canComment,
+              commentDisabledReason: canComment
+                ? undefined
+                : summary?.visibility === "private"
+                  ? "Only approved followers can comment on a private profile."
+                  : "You cannot comment on this profile.",
+            }}
           />
         </main>
         <SiteFooter />

@@ -6,6 +6,8 @@ import { buildEffectiveOwner } from "@/lib/effectiveProfile";
 import { noirProfile } from "@/lib/noirProfile";
 import type { ProfileDraft } from "@/lib/profileDraft";
 import type { Review } from "@/lib/supabase/reviews";
+import type { FollowState } from "@/lib/supabase/social";
+import type { CommentItem } from "@/components/social/ProfileComments";
 
 /**
  * Renders a profile whose customization lives in the database.
@@ -24,6 +26,8 @@ export function DatabaseProfile({
   reviews = [],
   avatarUrl = null,
   username,
+  social,
+  comments,
 }: {
   draft: ProfileDraft;
   /**
@@ -51,6 +55,26 @@ export function DatabaseProfile({
    * handle and build the wrong share URL.
    */
   username?: string;
+  /**
+   * Phase 8 — the real counts and the visitor's real relationship.
+   */
+  social?: {
+    followerCount: number;
+    followingCount: number;
+    state: FollowState;
+    isSelf: boolean;
+    blocked: boolean;
+    isPrivate: boolean;
+  };
+  /**
+   * Phase 8 — the comment list and whether the visitor may add to it.
+   */
+  comments?: {
+    items: CommentItem[];
+    nextOffset: number | null;
+    canComment: boolean;
+    commentDisabledReason?: string;
+  };
 }) {
   const owner = buildEffectiveOwner(noirProfile, draft);
 
@@ -65,6 +89,8 @@ export function DatabaseProfile({
         draft={draft}
         respectSectionVisibility
         reviews={reviews}
+        social={social}
+        comments={comments}
       />
     </ThemeScope>
   );

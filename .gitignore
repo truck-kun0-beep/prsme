@@ -99,3 +99,32 @@ supabase/.temp/
 # the PRSME project's database password, read by scripts/remote-db.mjs.
 # Git-ignored like every other credential in this repository.
 .env.local.db-password
+
+# --- PRSME one-off database diagnostics (scripts/localdb) ---
+# The probes written to answer a single question while a phase was being
+# chased down. Each one prints the state of the database at the moment it
+# was run, which is not useful to anyone else and is misleading once the
+# question has been answered.
+#
+# The tooling that is NOT here is the tooling worth keeping: the shared
+# splitter, the local runner, and the checks that assert a property
+# (check-splitter, probe-anon-rpc, reset-migration).
+/scripts/localdb/probe-acl-path.mjs
+/scripts/localdb/probe-acl.mjs
+/scripts/localdb/probe-anon-functions.mjs
+/scripts/localdb/probe-claims.mjs
+/scripts/localdb/probe-craft.mjs
+/scripts/localdb/probe-default-db.mjs
+/scripts/localdb/probe-default-owner.mjs
+/scripts/localdb/probe-default-privs.mjs
+/scripts/localdb/probe-dollar.mjs
+/scripts/localdb/probe-remote-endpoints.mjs
+/scripts/localdb/probe-remote-migrations.mjs
+/scripts/localdb/debug-split.mjs
+/scripts/localdb/dump-units.mjs
+/scripts/localdb/list-units.mjs
+/scripts/localdb/show-lines.mjs
+/scripts/localdb/show-unit.mjs
+/scripts/localdb/summary-units.mjs
+/scripts/localdb/units-dump.txt
+/scripts/localdb/block-trigger.txt

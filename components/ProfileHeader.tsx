@@ -6,6 +6,9 @@ import { SocialIcon, SocialPlatformLabel } from "./SocialIcons";
 import { ShareDialog } from "./ShareDialog";
 import { Button } from "./Button";
 import { Reveal } from "./Reveal";
+import { SocialPanel } from "@/components/social/SocialPanel";
+import { SafetyControls } from "@/components/social/SafetyControls";
+import type { FollowState } from "@/lib/supabase/social";
 import type { ProfileOwner } from "@/lib/noirProfile";
 
 /**
@@ -23,8 +26,32 @@ import type { ProfileOwner } from "@/lib/noirProfile";
  *     tooltip so the information is not lost.
  *   - Follower / following counts come from `owner.socialStats`, which is
  *     demo data kept deliberately outside the customizable draft.
+ *
+ * Phase 8: for a REGISTERED profile, `social` carries the real counts and
+ * the visitor's real relationship, and the header renders the interactive
+ * social panel instead of the demo counts. The demo profile at `/u/noir` has
+ * no `social` prop and keeps the fictional numbers.
  */
-export function ProfileHeader({ owner }: { owner: ProfileOwner }) {
+export function ProfileHeader({
+  owner,
+  social,
+  showSafetyControls = false,
+}: {
+  owner: ProfileOwner;
+  /**
+   * Phase 8 — the real relationship state, when the profile is backed by the
+   * database. Absent for the demo profile, which has no accounts.
+   */
+  social?: {
+    followerCount: number;
+    followingCount: number;
+    state: FollowState;
+    isSelf: boolean;
+    blocked: boolean;
+  };
+  /** Whether to render the block and report controls. */
+  showSafetyControls?: boolean;
+}) {
   const [shareOpen, setShareOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const profileUrl =
@@ -82,11 +109,35 @@ export function ProfileHeader({ owner }: { owner: ProfileOwner }) {
             <p className="pf-meta mt-1.5">prsme.app/{owner.username}</p>
           </Reveal>
 
-          {stats && (
+          {/*
+           * Phase 8 — the counts and the follow control.
+           *
+           * A registered profile renders the interactive panel; the demo
+           * profile keeps its fictional numbers. The two are never mixed: a
+           * demo count next to a real Follow button would be a lie.
+           */}
+          {social ? (
+            <Reveal delay={280}>
+              <SocialPanel
+                username={owner.username}
+                followerCount={social.followerCount}
+                followingCount={social.followingCount}
+                state={social.state}
+                isSelf={social.isSelf}
+                blocked={social.blocked}
+              />
+            </Reveal>
+          ) : stats ? (
             <Reveal delay={280}>
               <FollowerStats stats={stats} displayName={owner.displayName} />
             </Reveal>
-          )}
+          ) : null}
+
+          {showSafetyControls && !social?.isSelf ? (
+            <Reveal delay={320}>
+              <SafetyControls username={owner.username} blocked={social?.blocked ?? false} />
+            </Reveal>
+          ) : null}
 
           <Reveal delay={320}>
             <p

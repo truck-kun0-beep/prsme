@@ -112,6 +112,20 @@ export function AccountSettingsClient({
                     >
                       Edit profile
                     </Link>
+                    {/*
+                     * Phase 8 — the follow-request area.
+                     *
+                     * There is no friends tab and no friend count. This is the
+                     * queue for one-way follow requests: the ones sent to you,
+                     * and the ones you have sent.
+                     */}
+                    <Link
+                      href="/account/requests"
+                      className="text-[13px] text-iris-300 underline underline-offset-4"
+                      data-testid="account-follow-requests"
+                    >
+                      Follow requests
+                    </Link>
                   </div>
                 </>
               ) : (
