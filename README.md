@@ -1842,14 +1842,16 @@ to render a second. Two bells on one page would be two different answers to
 | Phase 9 — schema, events, server boundary, interface, live database | `npm run test:phase9` | **68 passed, 0 failed, 0 skipped** |
 | Phase 9 — policy-level SQL assertions (local) | `npm run test:phase9:sql` | **45 passed, 0 failed** |
 | Phase 9 — policy-level SQL assertions (remote) | `npm run test:phase9:remote-sql` | **45 passed, 0 failed** |
-| Phase 9 — the centre in a real browser, 390 px and 1280 px | `npm run test:phase9:browser` | **36 passed, 0 failed** |
+| Phase 9 — the centre in a real browser, 390 px and 1280 px | `npm run test:phase9:browser` | **37 passed, 0 failed** |
 | TypeScript | `npm run typecheck` | clean |
 | Lint | `npm run lint` | no warnings, no errors |
 
 The SQL file is written to be runnable in the Supabase SQL editor as well: it
 reports a PASS/FAIL line per assertion, and it leaves the database as it found
 it — every object it creates lives under a throwaway `phase9_sql_test` schema
-that is dropped at the end.
+that is dropped at the end, and the three accounts it creates are deleted with
+it. An account left behind is a real account, with a handle somebody could
+claim and a profile somebody could stumble into.
 
 The live section exercises the **denied** paths as well as the permitted ones: a
 forged notification is refused, another account's notification is invisible, an

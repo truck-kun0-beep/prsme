@@ -367,6 +367,22 @@ try {
     [follower.userId, followed.userId],
   ]);
 
+  /*
+   * The ACCOUNTS too.
+   *
+   * Deleting the profile rows is not enough. The signup created two real
+   * accounts in `auth.users`, and an account without a profile is still an
+   * account — one that shows up in the auth admin list, and one that any
+   * later suite counting accounts would trip over.
+   *
+   * The profile rows go with the accounts anyway (`profiles.user_id`
+   * references `auth.users(id)` with `on delete cascade`), so this is
+   * belt-and-braces: it holds even if the cascade is ever changed.
+   */
+  await db.query("delete from auth.users where id = any($1::uuid[])", [
+    [follower.userId, followed.userId],
+  ]);
+
   const notifications = await db.query(
     "select count(*)::int as count from public.notifications where recipient_id = $1",
     [followed.userId],
@@ -375,9 +391,14 @@ try {
     "select count(*)::int as count from public.profiles where user_id = any($1::uuid[])",
     [[follower.userId, followed.userId]],
   );
+  const accounts = await db.query(
+    "select count(*)::int as count from auth.users where id = any($1::uuid[])",
+    [[follower.userId, followed.userId]],
+  );
 
   check("no notification is left behind", (notifications.rows[0]?.count ?? 1) === 0);
   check("no test profile is left behind", (profiles.rows[0]?.count ?? 1) === 0);
+  check("no test account is left behind", (accounts.rows[0]?.count ?? 1) === 0);
 } finally {
   await db.end();
 }

@@ -1277,7 +1277,8 @@ rollback;
 -- =============================================================================
 
 select case when bool_and(passed) then 'PASS' else 'FAIL' end as outcome,
-       count(*) as assertions
+       count(*) as assertions,
+       count(*) filter (where passed) as passed
 from phase9_sql_test.results;
 
 -- =============================================================================
@@ -1311,6 +1312,28 @@ delete from public.user_blocks where blocker_id in (
 );
 
 delete from public.follows where follower_id in (
+  'e1111111-1111-1111-1111-111111111111',
+  'e2222222-2222-2222-2222-222222222222',
+  'e3333333-3333-3333-3333-333333333333'
+);
+
+-- The ACCOUNTS themselves.
+--
+-- The deletes above remove this file's rows, but the three accounts it
+-- created in `auth.users` would survive it — and a fixture account left on a
+-- project is a real account, with a handle somebody could claim and a profile
+-- somebody could stumble into.
+--
+-- The profile rows go with the accounts: `profiles.user_id` references
+-- `auth.users(id)` with `on delete cascade`, as does every social row and
+-- every notification. The explicit deletes above are kept anyway, because
+-- they document exactly what the file touched, and because they hold even if
+-- a cascade is ever changed.
+--
+-- The accounts are recreated by the inserts at the top of this file, so a
+-- second run starts from the same fixture.
+--
+delete from auth.users where id in (
   'e1111111-1111-1111-1111-111111111111',
   'e2222222-2222-2222-2222-222222222222',
   'e3333333-3333-3333-3333-333333333333'
