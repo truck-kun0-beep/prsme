@@ -819,7 +819,7 @@ npx supabase db push
 **Confirm the linked project is the PRSME one before pushing.** `supabase
 link` remembers whatever was linked last, so a stale link will push PRSME's
 schema into an unrelated database. Check with `npx supabase migration list
---linked`: the dry run must list PRSME's nine migrations and the remote
+--linked`: the dry run must list PRSME's migrations and the remote
 column must be empty. If the remote column shows versions that are not in
 `supabase/migrations/`, you are pointed at the wrong project — unlink and
 relink. See [Phase 6.2](#phase-62--deployment-to-supabase-and-what-is-actually-verified)
@@ -852,6 +852,12 @@ npm run db:remote:push
 | `20250101000007_review_backfill.sql` | The `media_review_stats` view + the backfill (Phase 6). |
 | `20250101000008_review_author_fk.sql` | The key from `media_reviews` to `profiles` that PostgREST needs to embed the author (Phase 6.1). |
 | `20250101000009_privilege_lock.sql` | The privilege outer lock, and a boolean that is boolean (Phase 6.1). |
+| `20250101000010_profile_comments_setting.sql` | The per-profile comment setting (Phase 8). |
+| `20250101000011_social_follows.sql` | The `follows` state machine, `profile_comments`, `user_blocks`, `content_reports` (Phase 8). |
+| `20250101000012_social_rls.sql` | RLS for the social layer (Phase 8). |
+| `20250101000013_function_privilege_lock.sql` | The function privilege lock for the social layer (Phase 8). |
+| `20250101000014_comment_rate_limit.sql` | The comment posting rate limit (Phase 8.4). |
+| `20250101000015_notifications.sql` | The `notifications` table, its constraints, its RLS, and the triggers that write it (Phase 9). |
 
 In the dashboard, set:
 
