@@ -13,6 +13,7 @@ import {
 import "./globals.css";
 import { THEME_BOOT_SCRIPT } from "@/lib/themeBoot";
 import { AccountProvider } from "@/components/auth/AccountProvider";
+import { NotificationCountProvider } from "@/components/notifications/NotificationCountProvider";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -167,7 +168,9 @@ export default function RootLayout({
           * which is why this wrapper is safe on a build with no credentials:
           * nothing below it calls `createClient()` unless configuration exists.
           */}
-        <AccountProvider>{children}</AccountProvider>
+        <AccountProvider>
+          <NotificationCountProvider>{children}</NotificationCountProvider>
+        </AccountProvider>
       </body>
     </html>
   );

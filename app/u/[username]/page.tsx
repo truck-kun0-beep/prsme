@@ -198,6 +198,16 @@ export default async function PublicProfilePage({
 
     return (
       <>
+        {/*
+         * Phase 9 — the navigation is rendered ONCE per route.
+         *
+         * `PublicProfileContent` can bring its own navigation, and the Studio
+         * preview iframe relies on that. This route renders one at the top of
+         * the page, so the profile below is told not to render a second.
+         *
+         * Two bells on one page would be two different answers to "what is
+         * unread", and two sticky headers would fight each other.
+         */}
         <SiteNav />
         <main id="main" className="pb-20">
           {/*

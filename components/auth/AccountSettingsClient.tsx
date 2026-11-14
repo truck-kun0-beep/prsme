@@ -126,6 +126,20 @@ export function AccountSettingsClient({
                     >
                       Follow requests
                     </Link>
+                    {/*
+                     * Phase 9 — the notification centre.
+                     *
+                     * The same list the navigation's bell opens. It is a link
+                     * here rather than a second copy of the list, so there is
+                     * one notification centre and one way to reach it.
+                     */}
+                    <Link
+                      href="/account/notifications"
+                      className="text-[13px] text-iris-300 underline underline-offset-4"
+                      data-testid="account-notifications"
+                    >
+                      Notifications
+                    </Link>
                   </div>
                 </>
               ) : (

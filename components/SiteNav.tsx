@@ -7,6 +7,7 @@ import { Wordmark } from "./Wordmark";
 import { Button } from "./Button";
 import { useAccount } from "./auth/AccountProvider";
 import { AccountMenu } from "./auth/AccountMenu";
+import { NotificationBell } from "./notifications/NotificationBell";
 
 /**
  * The primary navigation.
@@ -102,6 +103,22 @@ export function SiteNav() {
             </li>
           ))}
         </ul>
+
+        {/*
+         * Phase 9 — the notification bell.
+         *
+         * It lives in the HEADER, and not in the mobile panel, so that there
+         * is exactly ONE bell at every width.
+         *
+         * The panel would be a second place to look for the same control. A
+         * visitor who opened it on a phone would see the bell twice — or,
+         * if the header's copy were hidden at small widths, would have to
+         * guess that the panel was where the notifications lived.
+         *
+         * The header is on screen at every width, so one bell here is one
+         * bell everywhere.
+         */}
+        {isAuthenticated ? <NotificationBell /> : null}
 
         <div className="hidden items-center gap-2 md:flex">
           {isAuthenticated ? (

@@ -28,6 +28,7 @@ export function DatabaseProfile({
   username,
   social,
   comments,
+  withNavigation = false,
 }: {
   draft: ProfileDraft;
   /**
@@ -75,6 +76,14 @@ export function DatabaseProfile({
     canComment: boolean;
     commentDisabledReason?: string;
   };
+  /**
+   * Phase 9 — whether the profile renders the navigation.
+   *
+   * The `/u/[username]` route renders a navigation of its own, so this
+   * component does not render a second one. Two bells on one page would be
+   * two different answers to "what is unread".
+   */
+  withNavigation?: boolean;
 }) {
   const owner = buildEffectiveOwner(noirProfile, draft);
 
@@ -91,6 +100,7 @@ export function DatabaseProfile({
         reviews={reviews}
         social={social}
         comments={comments}
+        withNavigation={withNavigation}
       />
     </ThemeScope>
   );

@@ -63,6 +63,9 @@ function proxy(req, res, { host, port, pathPrefix, stripPrefix }) {
   const headers = { ...req.headers };
   delete headers.host;
   delete headers["content-length"];
+  delete headers.origin;
+  delete headers["access-control-request-headers"];
+  delete headers["access-control-request-method"];
 
   const upstream = httpRequest(
     {
@@ -73,13 +76,19 @@ function proxy(req, res, { host, port, pathPrefix, stripPrefix }) {
       headers,
     },
     (upstreamRes) => {
-      res.writeHead(upstreamRes.statusCode ?? 502, upstreamRes.headers);
+      res.writeHead(upstreamRes.statusCode ?? 502, {
+        ...upstreamRes.headers,
+        ...corsHeaders(req),
+      });
       upstreamRes.pipe(res);
     },
   );
 
   upstream.on("error", (error) => {
-    res.writeHead(502, { "content-type": "application/json" });
+    res.writeHead(502, {
+      "content-type": "application/json",
+      ...corsHeaders(req),
+    });
     res.end(
       JSON.stringify({
         message: `upstream ${host}:${port} is not reachable: ${error.message}`,
@@ -93,6 +102,57 @@ function proxy(req, res, { host, port, pathPrefix, stripPrefix }) {
 }
 
 /**
+ * The CORS headers every response carries.
+ *
+ * WHY THIS IS NEEDED HERE
+ *
+ * On a real Supabase project the browser and the API share an origin, so
+ * there is no cross-origin request to authorise. Locally the application is
+ * served from one port and the gateway from another, so EVERY call the
+ * browser makes — the sign-in request, the REST reads — is cross-origin.
+ *
+ * Without these headers the browser refuses the response before the
+ * application ever sees it, and the symptom is a sign-in form that reports
+ * "that email and password don't match an account" for a correct password:
+ * the request never reached the auth service, and the client turned the
+ * network failure into its generic credential error.
+ *
+ * The origin is echoed rather than fixed, because the local stack serves
+ * whatever port the application is on, and credentials are allowed because
+ * the browser client sends the session cookie on these requests.
+ */
+function corsHeaders(req) {
+  const origin = req.headers.origin;
+  return {
+    "access-control-allow-origin": origin ?? "*",
+    "access-control-allow-credentials": "true",
+    "access-control-allow-methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+    "access-control-allow-headers":
+      req.headers["access-control-request-headers"] ??
+      "authorization, apikey, content-type, x-client-info, x-supabase-api-version, prefer, range, x-profile-name",
+    "access-control-expose-headers": "content-range, x-total-count",
+    "access-control-max-age": "3600",
+    vary: "Origin",
+  };
+}
+
+/**
+ * Answer a CORS preflight.
+ *
+ * The browser sends OPTIONS before a request that carries headers it did not
+ * send on a "simple" request — the `apikey` header is one of them — and
+ * waits for the answer. If the preflight is not answered, the real request
+ * is never made.
+ */
+function answerPreflight(req, res) {
+  res.writeHead(204, {
+    ...corsHeaders(req),
+    "content-length": "0",
+  });
+  res.end();
+}
+
+/**
  * Start the gateway.
  *
  * `storageHandler` is optional: when supplied, `/storage/v1/*` is handled by
@@ -101,6 +161,16 @@ function proxy(req, res, { host, port, pathPrefix, stripPrefix }) {
 export function startGateway(port = GATEWAY_PORT, storageHandler = null) {
   const server = createServer((req, res) => {
     const url = req.url ?? "/";
+
+    /*
+     * The preflight comes before anything else, and it is answered here
+     * rather than being proxied: the upstream services do not know about
+     * this gateway's origin, and a proxied preflight would come back
+     * without the headers the browser needs.
+     */
+    if (req.method === "OPTIONS") {
+      return answerPreflight(req, res);
+    }
 
     if (url.startsWith("/rest/v1")) {
       return proxy(req, res, {
@@ -122,14 +192,20 @@ export function startGateway(port = GATEWAY_PORT, storageHandler = null) {
 
     if (url.startsWith("/storage/v1")) {
       if (storageHandler) return storageHandler(req, res, url);
-      res.writeHead(501, { "content-type": "application/json" });
+      res.writeHead(501, {
+        "content-type": "application/json",
+        ...corsHeaders(req),
+      });
       res.end(
         JSON.stringify({ message: "storage is not enabled in this local stack" }),
       );
       return;
     }
 
-    res.writeHead(200, { "content-type": "application/json" });
+    res.writeHead(200, {
+      "content-type": "application/json",
+      ...corsHeaders(req),
+    });
     res.end(
       JSON.stringify({
         service: "prsme-local-supabase-gateway",

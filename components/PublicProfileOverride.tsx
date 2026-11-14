@@ -94,6 +94,13 @@ export function PublicProfileOverride() {
           owner={buildEffectiveOwner(noirProfile, draft)}
           draft={draft}
           respectSectionVisibility
+          /*
+           * The route that hosts this island already renders a navigation, so
+           * the profile does not render a second one. Phase 9 — the navigation
+           * carries the notification bell, and two bells on one page would be
+           * two different answers to "what is unread".
+           */
+          withNavigation={false}
         />
       </ThemeScope>
     </div>

@@ -29,6 +29,8 @@ OAuth providers, a followers tier, and in-app account deletion are still to come
 
 - **Phase 4.7** — the Custom Links section's eyebrow, heading, and description become editable profile data, and the Soundtrack List's artist line stops silently discarding text on narrow screens. See [Phase 4.7](#phase-47--editable-custom-links-copy-and-the-soundtrack-list).
 
+- **Phase 9** — notifications and account activity. Five events (follow, follow request, approval, decline, comment), written by database triggers in the same transaction as the action that caused them, so a notification exists only when the action succeeded. One small badge in the navigation, one notification centre at `/account/notifications`. See [Phase 9](#phase-9--notifications-and-account-activity).
+
 ---
 
 ## Routes
@@ -1718,6 +1720,155 @@ one public profile, and no catalogue or review rows.
 - **A direct database connection is not available from this machine.** The
   project's `db` host resolves to IPv6 only, so `pg` cannot reach it and the
   Management API's query endpoint is the working path — as it was in Phase 6.3.
+
+---
+
+## Phase 9 — Notifications and account activity
+
+Phase 8 gave accounts a social layer. Phase 9 makes that layer **visible**: a
+signed-in account can see what happened to it — who followed it, who asked to
+follow a private profile, what became of that request, and who commented —
+without checking its profile every few minutes.
+
+No new features were invented. Every notification is a summary of something
+Phase 8 already does.
+
+### The five events
+
+| Event | Who is notified | Written when |
+| --- | --- | --- |
+| `follow` | the account that was followed | somebody follows a **public** account |
+| `follow_request` | the account whose private profile was requested | somebody asks to follow a **private** account |
+| `follow_accepted` | the requester | the owner approves the request |
+| `follow_declined` | the requester | the owner declines the request |
+| `comment` | the profile's owner | somebody comments on the profile |
+
+A cancelled request notifies nobody, a profile **view** notifies nobody, and a
+blocked pair generates nothing in either direction.
+
+### The rule that shapes the whole phase
+
+**A notification may only ever tell the recipient what they were already
+allowed to know.**
+
+That is enforced in the database, not in the interface:
+
+- the text is written by the **database**, not by the application, and it
+  carries only the actor's **handle** — the one piece of an account that is
+  public by construction, because the database keeps handles unique and the
+  availability check tells every visitor that a name is taken without telling
+  them who holds it;
+- a notification **never carries the text of a comment**. A comment on a private
+  profile is readable by the profile's approved followers; the notification is a
+  summary, and the recipient reads the comment itself, on the profile, under the
+  rules that already apply;
+- the actor's and the recipient's handles are **frozen onto the row** when the
+  event happens, so the notification does not have to JOIN the profiles table —
+  a JOIN would be filtered by the profile's RLS, and would either hide an event
+  the recipient is entitled to know about or leak a display name they are not
+  entitled to read.
+
+### Why the write is a trigger, and not application code
+
+The requirement is that a notification exists **only when the relationship or
+comment action actually succeeds**. A notification written by the application
+would have to be written after the fact, and there is a gap between the write
+and the notification where the write can fail, the notification can be written
+twice, or a retry can duplicate it.
+
+A trigger that runs in the **same transaction** as the action that caused it has
+none of those gaps: if the action rolls back, so does the notification; if the
+action commits, so does the notification.
+
+So the notification lives in the database, next to the follow state machine and
+the block rule it depends on:
+
+- `supabase/migrations/20250101000015_notifications.sql` — the table, the
+  constraints, the indexes, the RLS policies, the privilege lock, and the
+  triggers that write it;
+- `record_notification()` is the single place a notification is created, and it
+  is **revoked from every client role**. A client that could call it could
+  write a notification into somebody else's inbox — telling an account that
+  somebody it blocked had followed it.
+
+The table has **no INSERT policy and no DELETE policy at all**, and the client
+roles hold `select, update` and nothing else. There is no route that creates a
+notification.
+
+### The duplicate rule
+
+A repeated or retried event must not produce a second notification. The
+guarantee is a **unique index on the event**, not on the pair of accounts:
+
+- a follow event → that follow edge, that kind of event, once;
+- a comment event → that comment, once.
+
+A unique constraint on `(recipient, actor, type)` would be wrong: somebody may
+follow, unfollow and follow again, and the second follow is a real, separate
+event.
+
+The index is **partial on the rows that are still showing**, which is what makes
+a second ask work: when the owner resolves a request, the owner's own request
+notification is dismissed (it is no longer outstanding), so it does not occupy
+the index and the second ask creates a fresh notification rather than
+colliding with the first.
+
+### The interface
+
+| Piece | Where |
+| --- | --- |
+| The bell | `components/SiteNav.tsx` — **exactly one** per layout, in the header, at every width |
+| The badge | `components/notifications/NotificationBell.tsx` — small, `9+` past nine, hidden when nothing is unread |
+| The count | `components/notifications/NotificationCountProvider.tsx` — the badge and the centre read the same number, and it is always the **server's** number |
+| The centre | `components/notifications/NotificationCenter.tsx` — read/unread rows, mark read, mark all read, dismiss, load older, empty state |
+| The route | `app/account/notifications/page.tsx` — a Server Component, so an anonymous visitor is redirected before any client code loads |
+| The API | `app/api/notifications/route.ts` — identity comes from the session; there is no way to create one |
+| The data layer | `lib/supabase/notifications.ts` — reads, and the two state changes a recipient may make on their own rows |
+
+The badge is **small** on purpose. A large badge displaces the navigation around
+it, and a number that large reads as a number of problems rather than a number
+of notifications.
+
+There is exactly **one** bell on a page. `PublicProfileContent` can bring its
+own navigation — the Studio preview iframe relies on that — so the
+`/u/[username]` route renders a navigation of its own and tells the profile not
+to render a second. Two bells on one page would be two different answers to
+"what is unread".
+
+### What is verified
+
+| Suite | Command | Result |
+| --- | --- | --- |
+| Phase 9 — schema, events, server boundary, interface, live database | `npm run test:phase9` | **68 passed, 0 failed, 0 skipped** |
+| Phase 9 — policy-level SQL assertions (local) | `npm run test:phase9:sql` | **45 passed, 0 failed** |
+| Phase 9 — policy-level SQL assertions (remote) | `npm run test:phase9:remote-sql` | **45 passed, 0 failed** |
+| Phase 9 — the centre in a real browser, 390 px and 1280 px | `npm run test:phase9:browser` | **36 passed, 0 failed** |
+| TypeScript | `npm run typecheck` | clean |
+| Lint | `npm run lint` | no warnings, no errors |
+
+The SQL file is written to be runnable in the Supabase SQL editor as well: it
+reports a PASS/FAIL line per assertion, and it leaves the database as it found
+it — every object it creates lives under a throwaway `phase9_sql_test` schema
+that is dropped at the end.
+
+The live section exercises the **denied** paths as well as the permitted ones: a
+forged notification is refused, another account's notification is invisible, an
+anonymous client cannot read notifications, and a client cannot create one.
+
+### Phase 9 limits, stated honestly
+
+- **No realtime.** The badge is correct on load and after any action taken in
+  the centre. A notification that arrives while the tab is open does not appear
+  until the page is reloaded or an action is taken. That is unchanged from
+  Phase 5 and Phase 8.
+- **No push or email.** These are in-app notifications only.
+- **The list is paged at twenty.** The count is the database's number, so the
+  badge is right even when there are more notifications than fit on one page.
+- **Dismissed notifications are kept, not deleted.** They leave the list and
+  stop counting, but the row remains as a record of what happened.
+- **The direct database connection is still unavailable from this machine**,
+  so the remote SQL suite reaches the live project through the Management API's
+  query endpoint — the same path Phase 6.3 and Phase 8 used.
 
 ---
 

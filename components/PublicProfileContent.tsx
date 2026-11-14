@@ -90,6 +90,19 @@ interface PublicProfileContentProps {
     canComment: boolean;
     commentDisabledReason?: string;
   };
+  /**
+   * Whether this component renders the site navigation itself.
+   *
+   * Phase 9 — the navigation carries the notification bell, and a page with
+   * two bells is a page with two different answers to "what is unread".
+   *
+   * So the navigation is the HOST's decision, not the profile's. A host that
+   * already renders a navigation — the `/u/[username]` route — passes
+   * `false` and the profile renders only its content. A host that renders the
+   * profile alone — the Studio preview iframe — leaves the default, which is
+   * `true`, and the profile brings its own navigation.
+   */
+  withNavigation?: boolean;
 }
 
 export function PublicProfileContent({
@@ -99,6 +112,7 @@ export function PublicProfileContent({
   reviews = [],
   social,
   comments,
+  withNavigation = true,
 }: PublicProfileContentProps) {
   const visibleSections: Set<SectionId> =
     respectSectionVisibility && draft
@@ -131,7 +145,7 @@ export function PublicProfileContent({
 
   return (
     <div className="pf-document">
-      <SiteNav />
+      {withNavigation ? <SiteNav /> : null}
       <main id="main" className="pb-16">
         <ProfileHeader owner={owner} social={social} showSafetyControls={Boolean(social)} />
 
