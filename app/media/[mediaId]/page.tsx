@@ -13,7 +13,9 @@ import {
   mediaKindLabel,
 } from "@/components/reviews/ReviewCards";
 import { MediaReviewPanel } from "@/components/reviews/MediaReviewPanel";
+import { ListButton } from "@/components/list/ListButton";
 import { getMediaItemById, isUuid } from "@/lib/supabase/media";
+import { isOnOwnList } from "@/lib/supabase/list";
 import {
   getMediaReviewStats,
   listPublishedReviews,
@@ -135,6 +137,16 @@ export default async function MediaPage({ params }: { params: Promise<Params> })
     listPublishedReviews({ mediaId: media.id, limit: REVIEWS_PER_PAGE }),
   ]);
 
+  /*
+   * Whether this work is already on the signed-in user's list.
+   *
+   * Read from the database rather than guessed, so the bookmark renders the
+   * right state on the first paint. A guest gets `false` — the button still
+   * renders, and pressing it sends them to sign in with this page as the
+   * return path.
+   */
+  const saved = await isOnOwnList(media.id);
+
   const providerLabel = MEDIA_PROVIDER_LABELS[media.provider];
 
   return (
@@ -252,6 +264,19 @@ export default async function MediaPage({ params }: { params: Promise<Params> })
                     </a>
                   </p>
                 ) : null}
+
+                {/*
+                 * The bookmark. It sits with the other header actions rather
+                 * than in the review panel, because it acts on the WORK, not on
+                 * any one review of it.
+                 */}
+                <p className="mt-4">
+                  <ListButton
+                    mediaId={media.id}
+                    title={media.title}
+                    saved={saved}
+                  />
+                </p>
 
                 {media.description ? (
                   <p className="mt-5 max-w-2xl text-[14px] leading-relaxed text-[var(--text-muted)]">

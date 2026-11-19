@@ -33,6 +33,14 @@
   --accent-600: #5E3FD0;
   --bg-tint: transparent;
   --panel-haze: radial-gradient(60% 50% at 50% 0%, rgba(140,108,255,0.10), transparent 70%);
+  /* Liquid glass (PRE-PHASE 11). Every theme overrides these with its own
+     values; these are the neutral defaults so SSR markup never resolves an
+     undefined custom property. */
+  --glass-surface: rgba(255, 255, 255, 0.055);
+  --glass-border: rgba(255, 255, 255, 0.10);
+  --glass-highlight: rgba(255, 255, 255, 0.07);
+  --glass-sheen: rgba(168, 146, 255, 0.16);
+  --glass-blur: 14px;
 
   /* Lines */
   --line-soft: rgba(255, 255, 255, 0.06);
@@ -100,7 +108,20 @@ html[data-theme] {
   color-scheme: dark;
 }
 
-/* The Paper theme is a designed light theme; native widgets follow suit. */
+/* Porcelain is the light theme; native widgets follow suit. */
+html[data-theme="porcelain"] {
+  color-scheme: light;
+}
+
+/*
+ * Legacy theme ids.
+ *
+ * A saved profile may still carry one of the pre-curation ids. The boot
+ * script normalises it before paint, but a profile rendered on the server
+ * before the client script runs would otherwise resolve no tokens — so the
+ * light-theme declaration is repeated for every id that maps to Porcelain.
+ */
+html[data-theme="soft-sage"],
 html[data-theme="paper"] {
   color-scheme: light;
 }
@@ -216,6 +237,184 @@ h3 {
     border-radius: var(--r-lg);
   }
 
+  /* --- Liquid glass (PRE-PHASE 11) --------------------------------------
+   *
+   * A restrained, token-driven glass treatment.
+   *
+   * THE RULES THIS ENFORCES
+   *
+   *   1. The glass is a *surface*, not a filter on the page. Only containers
+   *      opt in — never paragraphs, never body copy. Text stays on a flat
+   *      background so it is always readable.
+   *   2. The colours come from the theme's own glass tokens, so the glass
+   *      belongs to the palette instead of sitting on top of it as a grey
+   *      film.
+   *   3. The movement is a *transition*, never a loop. A continuous animation
+   *      would keep the compositor busy on a phone and would never let the
+   *      page settle.
+   *   4. Nothing animates size, position, or margin. A liquid highlight that
+   *      moved the layout would cause the reflow the brief forbids.
+   *   5. `prefers-reduced-motion` removes the movement entirely — the glass
+   *      stays, the travel does not.
+   */
+  .glass-surface {
+    position: relative;
+    isolation: isolate;
+    background: var(--glass-surface, rgba(255, 255, 255, 0.06));
+    border: 1px solid var(--glass-border, var(--line-soft));
+    border-radius: var(--r-lg);
+    -webkit-backdrop-filter: blur(var(--glass-blur, 14px))
+      saturate(140%);
+    backdrop-filter: blur(var(--glass-blur, 14px)) saturate(140%);
+    box-shadow:
+      inset 0 1px 0 0 var(--glass-highlight, rgba(255, 255, 255, 0.07)),
+      0 12px 32px -24px rgba(0, 0, 0, 0.7);
+    overflow: hidden;
+  }
+
+  /*
+   * The specular highlight.
+   *
+   * A pseudo-element rather than a background layer, because it needs to
+   * travel across the surface on hover without repainting the container's own
+   * background. `transform` only — no layout properties — so the movement
+   * cannot shift the page.
+   */
+  .glass-surface::before {
+    content: "";
+    position: absolute;
+    inset: -60% -20%;
+    z-index: -1;
+    pointer-events: none;
+    background: radial-gradient(
+      42% 42% at 50% 50%,
+      var(--glass-sheen, rgba(168, 146, 255, 0.16)),
+      transparent 70%
+    );
+    opacity: 0;
+    transform: translate3d(-18%, -12%, 0) scale(0.9);
+    transition:
+      opacity 520ms var(--ease-soft),
+      transform 720ms var(--ease-soft);
+  }
+  .glass-surface:hover::before,
+  .glass-surface:focus-within::before {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+
+  /* A crisper top edge — the "lip" of a glass panel. */
+  .glass-surface::after {
+    content: "";
+    position: absolute;
+    inset-inline: 12%;
+    top: 0;
+    height: 1px;
+    pointer-events: none;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      var(--glass-highlight, rgba(255, 255, 255, 0.07)),
+      transparent
+    );
+  }
+
+  /*
+   * The profile-scoped twin.
+   *
+   * Inside a themed profile the glass reads the `--pf-glass-*` tokens, so a
+   * profile in Porcelain gets a pale glass and a profile in Obsidian gets a
+   * dark one — from the same rule.
+   */
+  .pf-glass-surface {
+    position: relative;
+    isolation: isolate;
+    background: var(--pf-glass-surface, rgba(255, 255, 255, 0.06));
+    border: 1px solid var(--pf-glass-border, var(--pf-border));
+    border-radius: 1rem;
+    -webkit-backdrop-filter: blur(var(--pf-glass-blur, 14px))
+      saturate(140%);
+    backdrop-filter: blur(var(--pf-glass-blur, 14px)) saturate(140%);
+    box-shadow:
+      inset 0 1px 0 0 var(--pf-glass-highlight, rgba(255, 255, 255, 0.07)),
+      0 12px 32px -24px rgba(0, 0, 0, 0.6);
+    overflow: hidden;
+  }
+  .pf-glass-surface::before {
+    content: "";
+    position: absolute;
+    inset: -60% -20%;
+    z-index: -1;
+    pointer-events: none;
+    background: radial-gradient(
+      42% 42% at 50% 50%,
+      var(--pf-glass-sheen, rgba(168, 146, 255, 0.16)),
+      transparent 70%
+    );
+    opacity: 0;
+    transform: translate3d(-18%, -12%, 0) scale(0.9);
+    transition:
+      opacity 520ms var(--ease-soft),
+      transform 720ms var(--ease-soft);
+  }
+  .pf-glass-surface:hover::before,
+  .pf-glass-surface:focus-within::before {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  .pf-glass-surface::after {
+    content: "";
+    position: absolute;
+    inset-inline: 12%;
+    top: 0;
+    height: 1px;
+    pointer-events: none;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      var(--pf-glass-highlight, rgba(255, 255, 255, 0.07)),
+      transparent
+    );
+  }
+
+  /*
+   * Reduced motion.
+   *
+   * The glass itself stays — it is a surface treatment, not an animation — but
+   * the highlight no longer travels. A user who has asked for less motion gets
+   * a still, legible page.
+   */
+  @media (prefers-reduced-motion: reduce) {
+    .glass-surface::before,
+    .pf-glass-surface::before {
+      opacity: 0.5;
+      transform: none;
+      transition: none;
+    }
+    .glass-surface:hover::before,
+    .glass-surface:focus-within::before,
+    .pf-glass-surface:hover::before,
+    .pf-glass-surface:focus-within::before {
+      opacity: 0.5;
+      transform: none;
+    }
+  }
+
+  /*
+   * The theme showcase card's inner surface.
+   *
+   * Each About theme card paints with its own theme's tokens, so the glass
+   * inside it is that theme's glass — a Porcelain card gets a pale glass and
+   * an Obsidian card gets a dark one, from the same rule.
+   */
+  .theme-card-surface {
+    background: var(--pf-glass-surface, rgba(255, 255, 255, 0.055));
+    -webkit-backdrop-filter: blur(var(--pf-glass-blur, 14px))
+      saturate(140%);
+    backdrop-filter: blur(var(--pf-glass-blur, 14px)) saturate(140%);
+    border-bottom: 1px solid var(--pf-glass-border, var(--pf-border));
+  }
+
   /* Prismatic gradient for accent text/numbers */
   .text-prismatic {
     background: linear-gradient(
@@ -320,8 +519,21 @@ h3 {
  * come from the same token families.
  */
 .site-nav-scrim {
-  background: color-mix(in oklab, var(--pf-bg, var(--surface-1)) 82%, transparent);
-  border-bottom-color: var(--pf-border, var(--line-soft));
+  /*
+   * The navigation is the one surface that always sits over content, so it is
+   * the one place a real glass is unavoidable. The fill and the border come
+   * from the active theme's glass tokens, which means the nav picks up the
+   * profile palette when it is inside a themed profile and the site palette
+   * everywhere else.
+   */
+  background: color-mix(
+    in oklab,
+    var(--glass-surface, rgba(255, 255, 255, 0.055)) 92%,
+    var(--pf-bg, var(--surface-1))
+  );
+  border-bottom-color: var(--glass-border, var(--pf-border, var(--line-soft)));
+  -webkit-backdrop-filter: blur(var(--glass-blur, 14px)) saturate(140%);
+  backdrop-filter: blur(var(--glass-blur, 14px)) saturate(140%);
 }
 .site-nav-link {
   color: var(--pf-text-muted, var(--text-muted));
@@ -617,6 +829,17 @@ h3 {
   border: 1px solid var(--pf-border);
   border-radius: 1rem;
   background: var(--pf-surface-1);
+  /*
+   * PRE-PHASE 11 — the collection frame is one of the few *containers* on a
+   * profile, so it is one of the few places a glass reads correctly: the
+   * shelf sits over the page background, and the content inside it stays on
+   * flat surfaces so the text is never behind a blur.
+   */
+  background: var(--pf-glass-surface, var(--pf-surface-1));
+  border-color: var(--pf-glass-border, var(--pf-border));
+  -webkit-backdrop-filter: blur(var(--pf-glass-blur, 14px)) saturate(140%);
+  backdrop-filter: blur(var(--pf-glass-blur, 14px)) saturate(140%);
+  box-shadow: inset 0 1px 0 0 var(--pf-glass-highlight, transparent);
 }
 
 /* Collection metadata line (item count / visibility) */

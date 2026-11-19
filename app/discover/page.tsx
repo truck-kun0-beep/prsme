@@ -14,6 +14,7 @@ import {
   listPublishedReviews,
 } from "@/lib/supabase/reviews";
 import { searchMediaItems } from "@/lib/supabase/media";
+import { listOwnListMediaIds } from "@/lib/supabase/list";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import {
   MEDIA_KIND_LABELS,
@@ -21,12 +22,12 @@ import {
 } from "@/lib/media/types";
 
 export const metadata: Metadata = {
-  title: "Discover Reviews",
+  title: "Discover",
   description:
     "Browse real reviews of films, TV series, music, manga, and books on PRSME. Every score and review count comes from PRSME members.",
   alternates: { canonical: "/discover" },
   openGraph: {
-    title: "Discover Reviews · PRSME",
+    title: "Discover · PRSME",
     description:
       "Real reviews of films, TV series, music, manga, and books — rated by PRSME members.",
     url: "/discover",
@@ -121,7 +122,7 @@ export default async function DiscoverPage({
         <SiteNav />
         <main id="main" className="container-page py-16 md:py-24">
           <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-[var(--accent-300)]">
-            Discover Reviews
+            Discover
           </p>
           <h1 className="mt-3 max-w-2xl font-display text-4xl leading-tight text-[var(--text-strong)] md:text-5xl">
             Real reviews, from real accounts.
@@ -175,6 +176,15 @@ export default async function DiscoverPage({
     : [];
 
   /*
+   * Which catalogue entries are already on the signed-in user's list.
+   *
+   * Read once for the whole page, so the bookmark on every card renders its
+   * correct state on the first paint. Asking per card would issue one request
+   * per tile and the buttons would flash from "Add" to "In List".
+   */
+  const savedMediaIds = await listOwnListMediaIds();
+
+  /*
    * The sort order.
    *
    * "recent" is the database's own ordering (newest published first).
@@ -216,7 +226,7 @@ export default async function DiscoverPage({
         <section className="container-page pt-10 md:pt-16">
           <Reveal>
             <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-[var(--accent-300)]">
-              Discover Reviews
+              Discover
             </p>
             <h1 className="mt-3 max-w-3xl font-display text-4xl leading-[1.08] text-[var(--text-strong)] md:text-5xl">
               What people actually wrote.
@@ -278,6 +288,7 @@ export default async function DiscoverPage({
                     reviewCount={0}
                     ratingCount={0}
                     communityRating={null}
+                    savedMediaIds={savedMediaIds}
                   />
                 ))}
               </div>
@@ -382,7 +393,11 @@ export default async function DiscoverPage({
             <>
               <div className="space-y-4" data-testid="discover-review-feed">
                 {orderedFeed.map((review) => (
-                  <ReviewCard key={review.id} review={review} />
+                  <ReviewCard
+                    key={review.id}
+                    review={review}
+                    savedMediaIds={savedMediaIds}
+                  />
                 ))}
               </div>
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import Link from "next/link";
 import { ProfileAvatar } from "./ProfileAvatar";
 import { SocialIcon, SocialPlatformLabel } from "./SocialIcons";
 import { ShareDialog } from "./ShareDialog";
@@ -136,6 +137,31 @@ export function ProfileHeader({
           {showSafetyControls && !social?.isSelf ? (
             <Reveal delay={320}>
               <SafetyControls username={owner.username} blocked={social?.blocked ?? false} />
+            </Reveal>
+          ) : null}
+
+          {/*
+           * PRE-PHASE 11 — the owner keeps a direct route into the editor
+           * from their own profile.
+           *
+           * The prominent "View Profile" action replaced "Edit Profile" in the
+           * navigation, so the editing entry point moved here — to the one
+           * page where it is unambiguously about *this* profile. It renders
+           * only for the owner: `social.isSelf` is decided by the database, so
+           * this is not a visibility control a visitor can fake.
+           */}
+          {social?.isSelf ? (
+            <Reveal delay={320}>
+              <p className="mt-4">
+                <Link
+                  href="/studio"
+                  className="pf-meta inline-flex items-center gap-1.5 underline underline-offset-4 transition-colors hover:text-[var(--pf-text)]"
+                  data-testid="profile-customize-link"
+                >
+                  Customize profile
+                  <span aria-hidden>→</span>
+                </Link>
+              </p>
             </Reveal>
           ) : null}
 

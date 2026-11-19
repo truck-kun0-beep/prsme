@@ -40,6 +40,8 @@
     "test:phase10:sql": "node scripts/localdb/phase10-sql-tests.mjs",
     "test:phase10:remote-sql": "node scripts/phase10-remote-sql-tests.mjs",
     "test:phase10:browser": "node scripts/localdb/phase10-browser-tests.mjs",
+    "test:prephase11:sql": "node scripts/localdb/prephase11-sql-tests.mjs",
+    "test:prephase11:remote-sql": "node scripts/prephase11-remote-sql-tests.mjs",
     "db:check:remote-migration": "node scripts/check-remote-migration-matches.mjs",
     "db:check:dollar-quotes": "node scripts/localdb/scan-dollar-quotes.mjs",
     "db:check:splitter": "node scripts/localdb/check-splitter.mjs",

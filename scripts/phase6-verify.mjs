@@ -512,16 +512,28 @@ function verifyNavigation() {
   const nav = read("components/SiteNav.tsx");
 
   check(
-    "Discover Reviews points at /discover",
+    "Discover points at /discover",
     /href: "\/discover"/.test(nav),
   );
   check(
     "About points at /about",
     /href: "\/about"/.test(nav),
   );
+  /*
+   * PRE-PHASE 11 — Themes is no longer a primary navigation entry. It is a
+   * section of the About page (`/about#themes`), and the old `/themes` route
+   * redirects there. So the navigation must NOT carry a themes link any more,
+   * and the redirect must exist.
+   */
   check(
-    "the Themes link still reaches the landing page's themes section",
-    /themesHref/.test(nav) && /"#themes"/.test(nav),
+    "Themes is no longer a primary navigation entry",
+    !/label: "Themes"/.test(nav) && !/themesHref/.test(nav),
+  );
+  check(
+    "the old /themes route redirects into the About page's themes section",
+    /redirect\("\/about#themes"\)/.test(
+      read("app/themes/page.tsx"),
+    ),
   );
   check(
     "Taste and Share are gone from the primary navigation",

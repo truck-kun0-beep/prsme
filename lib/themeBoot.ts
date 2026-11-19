@@ -8,20 +8,36 @@
  *
  * This file is intentionally NOT marked "use client" — it ships as a
  * plain string into the server-rendered <head>.
+ *
+ * PRE-PHASE 11
+ *
+ * Two things changed here:
+ *
+ *   1. The preset table is generated from the *whole* registry rather than
+ *      from a hand-written list of five ids, so a new theme is never missed.
+ *   2. A legacy theme id is normalised on the client too. The server does
+ *      the same normalisation when it reads the draft, but the boot script
+ *      runs before React has hydrated and before the server has had a chance
+ *      to correct the DOM — so without this, a profile saved with the old
+ *      `rose-noir` id would paint itself with the default palette for a
+ *      moment and then jump.
  */
 
-import { THEME_BY_ID, type ThemeId } from "./theme";
+import { THEME_PRESETS, LEGACY_THEME_ALIASES, type ThemeId } from "./theme";
 
+/**
+ * The whole registry, keyed by id. Serialised into the script.
+ *
+ * `THEME_PRESETS` is the single source of truth for the site-level token
+ * map, so the script and the server can never disagree about what a theme
+ * looks like.
+ */
 const PRESET_TOKENS_JSON = JSON.stringify(
-  Object.fromEntries(
-    (
-      ["obsidian", "violet", "midnight", "rose-noir", "paper"] as ThemeId[]
-    ).map((id) => [id, THEME_BY_ID[id].tokens]),
-  ),
+  Object.fromEntries(THEME_PRESETS.map((t) => [t.id, t.tokens])),
 );
 
-const PAPER_GRAIN_URL =
-  "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)' opacity='0.55'/></svg>\")";
+/** The legacy-alias map, so the client resolves an old id the same way. */
+const LEGACY_ALIAS_JSON = JSON.stringify(LEGACY_THEME_ALIASES);
 
 export const THEME_BOOT_SCRIPT = `
 (function(){
@@ -32,17 +48,24 @@ export const THEME_BOOT_SCRIPT = `
     if (!data || data.version !== 1) return;
     var appearance = data.appearance;
     if (!appearance) return;
-    var themeId = appearance.theme || 'obsidian';
+
+    // Normalise a legacy theme id before painting anything.
+    var legacy = ${LEGACY_ALIAS_JSON};
+    var requested = appearance.theme || 'obsidian';
+    var themeId = legacy[requested] || requested;
+    if (!${PRESET_TOKENS_JSON}[themeId]) themeId = 'obsidian';
+
     document.documentElement.setAttribute('data-theme', themeId);
+
     var presets = ${PRESET_TOKENS_JSON};
-    var preset = presets[themeId] || presets.obsidian;
+    var preset = presets[themeId];
     var css = 'html[data-theme="' + themeId + '"] {';
     for (var k in preset) css += k + ':' + preset[k] + ';';
     css += '}';
+
+    // Only 'solid' and 'gradient' exist now; the paper-grain mode was removed.
     var bg = '';
-    if (appearance.background === 'paper-grain') {
-      bg = 'html[data-theme] body{background-image:${PAPER_GRAIN_URL};background-repeat:no-repeat;background-attachment:fixed;background-size:cover;}';
-    } else if (appearance.background === 'gradient') {
+    if (appearance.background === 'gradient') {
       bg = 'html[data-theme] body{background-image:' + (preset['--panel-haze'] || 'transparent') + ';background-repeat:no-repeat;background-attachment:fixed;background-size:cover;}';
     } else {
       bg = 'html[data-theme] body{background-image:transparent;}';
@@ -54,3 +77,5 @@ export const THEME_BOOT_SCRIPT = `
   } catch (e) {}
 })();
 `.trim();
+
+export type { ThemeId };

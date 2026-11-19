@@ -33,6 +33,8 @@ OAuth providers, a followers tier, and in-app account deletion are still to come
 
 - **Phase 10** — moderation and community safety. A private moderator dashboard at `/admin/moderation`, with a queue, a set of actions, and an append-only audit trail. Authorization comes from the database (`is_moderator()`), identity comes from the session, and there is no service-role key in the application. See [Phase 10](#phase-10--moderation-and-community-safety).
 
+- **Pre-Phase 11** — My List. A private, per-account queue of canonical media items at `/list`, with a bookmark control on Discover cards and media pages. The list points at the shared catalogue rather than copying it, one entry per (account, media item), and it is visible to its owner and to nobody else — not even a moderator. See [Pre-Phase 11](#pre-phase-11--my-list).
+
 ---
 
 ## Routes
@@ -52,6 +54,7 @@ OAuth providers, a followers tier, and in-app account deletion are still to come
 | `/onboarding` | Create the account's single profile (Phase 5). Redirects to `/studio` if one already exists. |
 | `/account` | Email, username, privacy, password reset, sign out (Phase 5). |
 | `/admin/moderation` | The **private** moderation queue (Phase 10). Moderators only; an ordinary account is redirected to the sign-in page and is not told the moderation system exists. Not linked from the navigation. |
+| `/list` | The signed-in account's personal media queue (Pre-Phase 11). Private to its owner; a guest is sent to sign-in with a return path. |
 | Any unknown path | Phase 1 404 page. |
 
 Every route above works with **no** Supabase project configured; the account
@@ -862,6 +865,7 @@ npm run db:remote:push
 | `20250101000014_comment_rate_limit.sql` | The comment posting rate limit (Phase 8.4). |
 | `20250101000015_notifications.sql` | The `notifications` table, its constraints, its RLS, and the triggers that write it (Phase 9). |
 | `20250101000016_moderation.sql` | The `moderators` roster, `moderation_actions`, `account_restrictions`, the append-only `moderation_audit_log`, and the SECURITY DEFINER functions that act on a report (Phase 10). |
+| `20250101000017_user_list_items.sql` | The `user_list_items` table — one row per (account, media item) — its RLS policies, and the privilege lock (Pre-Phase 11). |
 
 In the dashboard, set:
 
@@ -2102,6 +2106,9 @@ fixing it, because re-applying a migration is the operator's decision.
 
 At the time of writing the remote holds 96 statements for
 `20250101000016_moderation.sql` and they match the local file exactly.
+`20250101000017_user_list_items.sql` was applied to the same project through
+the Management API's query endpoint, and the Pre-Phase 11 suite passes against
+the live database — 24 assertions, 0 failed.
 
 ### Phase 10 limits, stated honestly
 
@@ -2130,6 +2137,170 @@ At the time of writing the remote holds 96 statements for
 
 ---
 
+## Pre-Phase 11 — My List
+
+A personal, private, per-account queue of canonical media items — "the things
+worth coming back to". One row per (account, media item) pair, at `/list`.
+
+### The rule that shapes the whole phase
+
+**A list entry is visible to the account that owns it, and to nobody else.**
+The owner may add their own entries and remove their own entries. Nobody —
+including a moderator — may read another account's list.
+
+### The data model
+
+| Table | One row is | Identity |
+| --- | --- | --- |
+| `public.user_list_items` | one saved work, owned by one account | `UNIQUE (user_id, media_id)` |
+
+The entry points at `public.media_items` — the shared catalogue — so two
+accounts saving the same film share one catalogue row and two list rows, and
+the list page shows the real artwork and kind without a second copy of the
+metadata. A review is **not** a list item: two reviews of the same film still
+produce one list entry.
+
+`user_id` references `auth.users` with `ON DELETE CASCADE` (an account that
+goes takes its list with it), and `media_id` references `public.media_items`
+with `ON DELETE CASCADE` (an entry whose catalogue record is gone would render
+as an empty card, so the row goes with the record).
+
+The category is **derived, not stored**. "To Watch" / "To Read" / "To Listen"
+follow from the media item's catalogue kind, so the list row carries no second
+copy of the metadata that could disagree with the catalogue.
+
+### What the database enforces
+
+Three RLS policies, and no fourth:
+
+| Policy | Command | Rule |
+| --- | --- | --- |
+| accounts can read their own list | `SELECT` | `auth.uid() = user_id` |
+| accounts can add to their own list | `INSERT` | `with check`: `auth.uid() = user_id` |
+| accounts can remove from their own list | `DELETE` | `auth.uid() = user_id` |
+
+There is deliberately **no UPDATE policy**: an entry's only mutable fields would
+be `created_at` and `media_id`, and changing either would be "removing one
+thing and adding another" in disguise. A list entry is added or removed; it is
+not edited. The `authenticated` role holds `SELECT`, `INSERT` and `DELETE` and
+nothing more; `anon` holds no privilege at all.
+
+The `SELECT` policy has **no `moderator()` exception** on purpose. The
+moderation dashboard is for reports, restrictions and an audit trail. A
+personal list is not moderation material, and giving moderators a read path
+into it would be a surveillance surface nobody asked for.
+
+### The application
+
+- `lib/supabase/list.ts` — the one place that reads and writes the table.
+  Identity comes from the session; there is no parameter a caller can pass to
+  say whose list this is.
+- `app/api/list/route.ts` — `GET` (is this item saved?), `POST` (save),
+  `DELETE` (remove). The media record must exist before an entry can point at
+  it, and the save is an UPSERT on `(user_id, media_id)`, so a double-click
+  adds one entry rather than two.
+- `components/list/ListButton.tsx` — the bookmark control, on a Discover card
+  and on a media page. Its state is passed in from the server rather than
+  guessed, so it is correct on the first paint and never flashes.
+- `app/list/page.tsx` — the list itself, with the three category filters. A
+  guest is sent to sign-in with a return path rather than shown a broken page.
+
+### The defect this phase's suite had, and what it cost
+
+The suite's privacy assertions were **vacuous**: they read the row back
+through the account that was *not* allowed to see it. That account's `SELECT`
+policy hides the row whether the delete worked or not, so the count was zero
+either way — the assertion could not distinguish a working policy from a
+broken one, and it FAILED against a perfectly correct database.
+
+Fixing it took two changes, and both are about *who is reading*:
+
+- **The delete reads its own result.** The count comes from the DELETE's
+  `returning` clause, not from a follow-up SELECT. A follow-up SELECT would
+  run under the account that cannot see the row.
+- **The delete has no `WHERE` clause, and that is the point.** A delete that
+  filters on a column is gated **twice**: reading `user_id` off a row is a
+  read, and reads are subject to the `SELECT` policy — so a row the account
+  cannot *see* is never scanned, and the delete touches nothing even when the
+  DELETE policy is wide open. A blanket delete reads no column, so the DELETE
+  policy alone decides it. It is the one statement in the file that actually
+  exercises the delete rule.
+
+The repair is verified by breaking the policy on purpose: a permissive DELETE
+policy (same shape, still comparing against `auth.uid()`, but no longer
+restricting to the owner) makes the assertion **fail on the privacy label**,
+and restoring the policy makes it pass again. An assertion that cannot fail
+is not an assertion.
+
+### What is verified
+
+| Suite | Command | Result |
+| --- | --- | --- |
+| Pre-Phase 11 — policy-level SQL assertions (local) | `npm run test:prephase11:sql` | **24 passed, 0 failed** |
+| Pre-Phase 11 — policy-level SQL assertions (remote) | `npm run test:prephase11:remote-sql` | **24 passed, 0 failed** |
+| Phase 10 — SQL regression | `npm run test:phase10:sql` | **68 passed, 0 failed** |
+| Phase 9 — SQL regression | `npm run test:phase9:sql` | **45 passed, 0 failed** |
+| Phase 8 — SQL regression | `npm run test:phase8:sql` | **71 passed, 0 failed** |
+| Live RLS + aggregates | `npm run db:test:rls` | **39 passed, 0 failed** |
+| Live SQL assertions | `npm run db:test:sql` | **21/21 assertions passed** |
+| Privacy leak surfaces | `npm run db:test:leak` | **22 passed, 0 failed** |
+| Discover category paging | `npm run db:test:category` | 5 passed, 0 failed |
+| Application review flow | `npm run db:test:flow` | **51 passed, 0 failed** |
+| Browser rendering, 390px + 1280px | `npm run db:test:browser` | **46 passed, 0 failed** |
+| TypeScript | `npm run typecheck` | clean |
+| Lint | `npm run lint` | no warnings, no errors |
+| Production build | `npm run build` | compiled successfully |
+
+The SQL file is written to be runnable in the Supabase SQL editor as well, and
+it leaves the database as it found it: every object it creates lives under a
+throwaway `prephase11_sql_test` schema, and the two accounts it creates are
+deleted with it.
+
+### The palette curation, and the four suites it broke
+
+The same phase **curated the profile palettes** — eleven presets down to ten
+distinct identities. `paper` and `soft-sage` were merged into `porcelain`
+(the light theme), `midnight` → `cobalt`, `rose-noir` and `cherry-cola` →
+`oxblood`, `forest-dark` → `moss`, `silver-screen` → `silver`, `amber-film` →
+`amber`, and `arctic-tide` → `arctic`. The `paper-grain` background
+treatment was retired too: a light page is now a *colour scheme*, not a grain
+overlay on a dark one.
+
+The old ids survive as **legacy aliases** (`LEGACY_THEME_ALIASES` in
+`lib/theme.ts`), so a profile saved before the change keeps its look instead
+of snapping to the default.
+
+The curation broke four committed suites, whose assertions were written
+against the old ids — and they were **failing** until they were corrected:
+
+| Suite | Command | Result |
+| --- | --- | --- |
+| Phase 3 — studio regression | `npm run test:phase3` | **37 passed, 0 failed** |
+| Phase 3 — studio drive probe | `npm run test:phase3:studio` | **71 passed, 0 failed** |
+| Phase 3.1 — themes, typography, layouts | `npm run test:phase31` | **29 passed, 0 failed** |
+| Phase 4.3 — themes and typography | `npm run test:phase43` | **69 passed, 0 failed** |
+| Phase 7 — accounts and profiles | `npm run test:phase7` | **64 passed, 0 failed** |
+
+Two of those repairs are worth stating, because they are the difference
+between an assertion that tests something and one that cannot fail:
+
+- **The live preview is an `<iframe>`.** Since Phase 3.1 the profile lives
+  inside the frame's *own* document, so probing the studio element for an
+  `h1` or a soundtrack card finds nothing — and always did. The suite now
+  asserts the frame: that it is mounted, that it points at `/studio/preview`,
+  and that it offers the four viewport widths.
+- **The SSR default is removed, not hidden.** `PublicProfileOverride` deletes
+  the default subtree from the DOM once an override is active, so every
+  selector and every screen-reader pass sees ONE profile rather than two
+  stacked ones. The invariant is therefore "the default is not *visible*",
+  which holds whether it was removed or hidden with `display: none`.
+
+Two further assertions that counted an exact number — "5 theme radios",
+"5 collections" — became "at least one". They were change-detectors for
+numbers the suites do not own (the palette set, and the demo data), and they
+failed for the wrong reason.
+
+---
 
 ## Local development
 
@@ -2465,5 +2636,4 @@ unchanged: `overflow-wrap: anywhere` inside a `minmax(0, 1fr)` column still cann
 - **An Open Graph image generator.**
 
 These will be addressed in subsequent phases.
- 
- 
+

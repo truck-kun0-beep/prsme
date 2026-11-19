@@ -681,7 +681,17 @@ async function main() {
   check("the loaded profile has the saved pronouns", loaded?.identity?.pronouns === "they/them");
   check("the loaded profile has the saved tags", JSON.stringify(loaded?.tags) === JSON.stringify(["Cinema", "Ambient music"]));
   check("the loaded profile has the saved socials", loaded?.socials?.[0]?.url === "https://instagram.com/p7owner");
-  check("the loaded profile has the saved theme", loaded?.appearance?.theme === "paper");
+  /*
+   * The theme is saved as `porcelain`.
+   *
+   * PRE-PHASE 11 — the palette collection was curated, and the light theme is
+   * now `porcelain`. The draft above is seeded with the LEGACY id `paper`,
+   * which `normaliseThemeId` maps onto `porcelain` (see `LEGACY_THEME_ALIASES`
+   * in `lib/theme.ts`), so the round-trip through the server returns the
+   * curated id. Asserting the curated id is what the round-trip actually
+   * guarantees.
+   */
+  check("the loaded profile has the saved theme", loaded?.appearance?.theme === "porcelain");
   check("the loaded profile has the saved typography", loaded?.appearance?.typography === "mono-led");
   check("the loaded profile has the saved layout", loaded?.appearance?.layout === "editorial");
   check("the loaded profile has the saved accent", loaded?.appearance?.accentOverride === "#e85d75");

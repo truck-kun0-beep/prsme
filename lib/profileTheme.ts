@@ -17,6 +17,14 @@
  *   - Global layout presets declare a content-canvas width, section rhythm,
  *     and type scale so "Editorial", "Balanced", and "Compact" produce
  *     structurally different pages — not just relabeled ones.
+ *
+ * PRE-PHASE 11 CURATION
+ *
+ * Ten palettes, each a complete token set, each visually distinct at a
+ * glance. The old collection held eleven palettes of which four pairs were
+ * near-duplicates; those were merged and replaced. See `lib/theme.ts` for the
+ * full merge table and the legacy-alias map that keeps old saved profiles
+ * rendering in the closest retained palette.
  */
 
 import type {
@@ -77,8 +85,35 @@ export interface ProfileTokens {
   "--pf-meta": string;
   "--pf-overlay-from": string;
   "--pf-overlay-via": string;
+  /*
+   * PRE-PHASE 11 — the glass family.
+   *
+   * The liquid-glass treatment is a *token* family, not a hardcoded effect:
+   * every theme declares its own glass surface, border, highlight, and sheen,
+   * so the glass picks up the palette rather than sitting on top of it as a
+   * grey film.
+   *
+   *   - `--pf-glass-surface`   the translucent fill
+   *   - `--pf-glass-border`    the hairline edge
+   *   - `--pf-glass-highlight` the specular sheen across the top edge
+   *   - `--pf-glass-sheen`     the accent-tinted light that moves on hover
+   */
+  "--pf-glass-surface": string;
+  "--pf-glass-border": string;
+  "--pf-glass-highlight": string;
+  "--pf-glass-sheen": string;
+  /** The blur radius the glass panels use, in px. */
+  "--pf-glass-blur": string;
 }
 
+/**
+ * Obsidian — the neutral dark PRSME default.
+ *
+ * Deliberately close to a true neutral: the surfaces are almost greyscale and
+ * only the accent carries colour. Every other dark palette in the collection
+ * is saturated *somewhere* — violet, cobalt, oxblood, moss, amber, arctic,
+ * terracotta — so Obsidian has to stay the one that is genuinely neutral.
+ */
 const OBSIDIAN_TOKENS: ProfileTokens = {
   "--pf-bg": "#07070B",
   "--pf-surface-1": "#0B0B10",
@@ -107,222 +142,202 @@ const OBSIDIAN_TOKENS: ProfileTokens = {
   "--pf-meta": "#6F6F80",
   "--pf-overlay-from": "rgba(7,7,11,0.92)",
   "--pf-overlay-via": "rgba(7,7,11,0.55)",
+  "--pf-glass-surface": "rgba(255, 255, 255, 0.055)",
+  "--pf-glass-border": "rgba(255, 255, 255, 0.10)",
+  "--pf-glass-highlight": "rgba(255, 255, 255, 0.07)",
+  "--pf-glass-sheen": "rgba(168, 146, 255, 0.16)",
+  "--pf-glass-blur": "14px",
 };
 
-const VIOLET_TOKENS: ProfileTokens = {
-  "--pf-bg": "#0E0820",
-  "--pf-surface-1": "#150A2E",
-  "--pf-surface-2": "#1B0F3A",
-  "--pf-surface-3": "#241548",
-  "--pf-text-strong": "#F6F2FF",
-  "--pf-text": "#E2D6FA",
-  "--pf-text-muted": "#A99ACF",
-  "--pf-text-faint": "#7F70A6",
-  "--pf-border": "rgba(196,168,255,0.12)",
-  "--pf-border-strong": "rgba(196,168,255,0.20)",
-  "--pf-accent": "#C4A8FF",
-  "--pf-accent-strong": "#A582FF",
-  "--pf-accent-fg": "#150A2E",
-  "--pf-accent-soft": "rgba(196,168,255,0.16)",
-  "--pf-hover": "rgba(196,168,255,0.12)",
-  "--pf-focus-ring": "rgba(196,168,255,0.60)",
-  "--pf-rating": "#D8C6FF",
-  "--pf-rating-bg": "rgba(196,168,255,0.14)",
-  "--pf-rating-border": "rgba(196,168,255,0.34)",
-  "--pf-rating-solid": "#251245",
-  "--pf-rating-border-strong": "#5A3FAB",
-  "--pf-tag-bg": "rgba(196,168,255,0.10)",
-  "--pf-tag-text": "#DCCFFF",
-  "--pf-tag-border": "rgba(196,168,255,0.20)",
-  "--pf-meta": "#8A79B4",
-  "--pf-overlay-from": "rgba(14,8,32,0.94)",
-  "--pf-overlay-via": "rgba(14,8,32,0.58)",
-};
-
-const MIDNIGHT_TOKENS: ProfileTokens = {
-  /* Deliberately blue/cyan — no violet survives in this theme. */
-  "--pf-bg": "#04080F",
-  "--pf-surface-1": "#080F1A",
-  "--pf-surface-2": "#0C1726",
-  "--pf-surface-3": "#112036",
-  "--pf-text-strong": "#EEF4FF",
-  "--pf-text": "#D6E2F4",
-  "--pf-text-muted": "#93A6C6",
-  "--pf-text-faint": "#5F7195",
-  "--pf-border": "rgba(134,181,255,0.12)",
-  "--pf-border-strong": "rgba(134,181,255,0.22)",
-  "--pf-accent": "#7DD3FC",
-  "--pf-accent-strong": "#38BDF8",
-  "--pf-accent-fg": "#04121F",
-  "--pf-accent-soft": "rgba(125,211,252,0.16)",
-  "--pf-hover": "rgba(125,211,252,0.12)",
-  "--pf-focus-ring": "rgba(125,211,252,0.62)",
-  "--pf-rating": "#7DD3FC",
-  "--pf-rating-bg": "rgba(125,211,252,0.14)",
-  "--pf-rating-border": "rgba(125,211,252,0.34)",
-  "--pf-rating-solid": "#0A1828",
-  "--pf-rating-border-strong": "#1B5A82",
-  "--pf-tag-bg": "rgba(134,181,255,0.10)",
-  "--pf-tag-text": "#BBD6F5",
-  "--pf-tag-border": "rgba(134,181,255,0.22)",
-  "--pf-meta": "#6B82A6",
-  "--pf-overlay-from": "rgba(4,8,15,0.94)",
-  "--pf-overlay-via": "rgba(4,8,15,0.58)",
-};
-
-const ROSE_TOKENS: ProfileTokens = {
-  "--pf-bg": "#0E0709",
-  "--pf-surface-1": "#160B0F",
-  "--pf-surface-2": "#1F0F14",
-  "--pf-surface-3": "#2A1419",
-  "--pf-text-strong": "#FFEFEF",
-  "--pf-text": "#EDD3D5",
-  "--pf-text-muted": "#B39899",
-  "--pf-text-faint": "#7C6364",
-  "--pf-border": "rgba(233,165,168,0.12)",
-  "--pf-border-strong": "rgba(233,165,168,0.22)",
-  "--pf-accent": "#E9A5A8",
-  "--pf-accent-strong": "#D6757B",
-  "--pf-accent-fg": "#1A0A0D",
-  "--pf-accent-soft": "rgba(233,165,168,0.16)",
-  "--pf-hover": "rgba(233,165,168,0.12)",
-  "--pf-focus-ring": "rgba(233,165,168,0.60)",
-  "--pf-rating": "#F0B7B9",
-  "--pf-rating-bg": "rgba(233,165,168,0.14)",
-  "--pf-rating-border": "rgba(233,165,168,0.34)",
-  "--pf-rating-solid": "#2A1216",
-  "--pf-rating-border-strong": "#7C3F45",
-  "--pf-tag-bg": "rgba(233,165,168,0.10)",
-  "--pf-tag-text": "#EBD0D1",
-  "--pf-tag-border": "rgba(233,165,168,0.22)",
-  "--pf-meta": "#8E7172",
-  "--pf-overlay-from": "rgba(14,7,9,0.94)",
-  "--pf-overlay-via": "rgba(14,7,9,0.58)",
-};
-
-const PAPER_TOKENS: ProfileTokens = {
-  /* A genuine light theme: dark ink, paper surfaces, readable borders. */
-  "--pf-bg": "#F7F4EE",
-  "--pf-surface-1": "#FBF8F2",
-  "--pf-surface-2": "#F1ECE2",
-  "--pf-surface-3": "#E5DDCB",
-  "--pf-text-strong": "#1B1B1F",
-  "--pf-text": "#2A2A30",
-  "--pf-text-muted": "#5C5C66",
-  "--pf-text-faint": "#8A8A95",
-  "--pf-border": "rgba(27,27,31,0.12)",
-  "--pf-border-strong": "rgba(27,27,31,0.22)",
-  "--pf-accent": "#4A38C2",
-  "--pf-accent-strong": "#3A2A99",
-  "--pf-accent-fg": "#FFFFFF",
-  "--pf-accent-soft": "rgba(74,56,194,0.10)",
-  "--pf-hover": "rgba(74,56,194,0.08)",
-  "--pf-focus-ring": "rgba(74,56,194,0.50)",
-  "--pf-rating": "#3A2A99",
-  "--pf-rating-bg": "rgba(74,56,194,0.09)",
-  "--pf-rating-border": "rgba(74,56,194,0.28)",
-  "--pf-rating-solid": "#FFFFFF",
-  "--pf-rating-border-strong": "#5B4AB6",
-  "--pf-tag-bg": "rgba(27,27,31,0.045)",
-  "--pf-tag-text": "#3A3A42",
-  "--pf-tag-border": "rgba(27,27,31,0.14)",
-  "--pf-meta": "#7A7A85",
-  "--pf-overlay-from": "rgba(251,248,242,0.94)",
-  "--pf-overlay-via": "rgba(251,248,242,0.62)",
-};
-
-/* -------------------------------------------------------------------------- */
-/*                        Phase 4.3 — six new themes                           */
-/* -------------------------------------------------------------------------- */
-
-/*
- * These six were added for Phase 4.3. Each is a *complete* palette — surfaces,
- * text, borders, accents, ratings, tags, and overlays all move together — and
- * none is an accent-only reskin of an existing preset.
+/**
+ * Violet Haze — a saturated violet ground.
  *
- * The contrast floor that shaped the values below: body text and metadata sit
- * at >= 4.5:1 against their own surface, and `--pf-rating-solid` (the rating
- * chip body) is always an opaque colour so a score stays legible over a bright
- * poster as well as over a dark page.
+ * The violet family is *not* Obsidian with a purple accent: the page itself
+ * is purple, the elevated surfaces are purple, and the borders are tinted
+ * violet. The whole page reads as violet at a glance.
  */
-
-/** Forest After Dark — deep green ground, muted sage highlights. */
-const FOREST_TOKENS: ProfileTokens = {
-  "--pf-bg": "#060D0A",
-  "--pf-surface-1": "#0A1410",
-  "--pf-surface-2": "#0F1D17",
-  "--pf-surface-3": "#15281F",
-  "--pf-text-strong": "#EDF5EF",
-  "--pf-text": "#D6E5DA",
-  "--pf-text-muted": "#93AC9C",
-  "--pf-text-faint": "#647C6D",
-  "--pf-border": "rgba(167,205,182,0.12)",
-  "--pf-border-strong": "rgba(167,205,182,0.22)",
-  "--pf-accent": "#A7CDB6",
-  "--pf-accent-strong": "#84B79A",
-  "--pf-accent-fg": "#06120C",
-  "--pf-accent-soft": "rgba(167,205,182,0.15)",
-  "--pf-hover": "rgba(167,205,182,0.11)",
-  "--pf-focus-ring": "rgba(167,205,182,0.58)",
-  "--pf-rating": "#B9DCC6",
-  "--pf-rating-bg": "rgba(167,205,182,0.14)",
-  "--pf-rating-border": "rgba(167,205,182,0.34)",
-  "--pf-rating-solid": "#0C1E16",
-  "--pf-rating-border-strong": "#3A6249",
-  "--pf-tag-bg": "rgba(167,205,182,0.09)",
-  "--pf-tag-text": "#C3DACB",
-  "--pf-tag-border": "rgba(167,205,182,0.20)",
-  "--pf-meta": "#6E8778",
-  "--pf-overlay-from": "rgba(6,13,10,0.94)",
-  "--pf-overlay-via": "rgba(6,13,10,0.58)",
+const VIOLET_TOKENS: ProfileTokens = {
+  "--pf-bg": "#120727",
+  "--pf-surface-1": "#1B0B3C",
+  "--pf-surface-2": "#251052",
+  "--pf-surface-3": "#31176C",
+  "--pf-text-strong": "#F8F3FF",
+  "--pf-text": "#E6DAFB",
+  "--pf-text-muted": "#AD9BD6",
+  "--pf-text-faint": "#8271AA",
+  "--pf-border": "rgba(211,182,255,0.14)",
+  "--pf-border-strong": "rgba(211,182,255,0.24)",
+  "--pf-accent": "#D3B6FF",
+  "--pf-accent-strong": "#B78DFF",
+  "--pf-accent-fg": "#1B0B3C",
+  "--pf-accent-soft": "rgba(211,182,255,0.16)",
+  "--pf-hover": "rgba(211,182,255,0.12)",
+  "--pf-focus-ring": "rgba(211,182,255,0.62)",
+  "--pf-rating": "#E1CDFF",
+  "--pf-rating-bg": "rgba(211,182,255,0.14)",
+  "--pf-rating-border": "rgba(211,182,255,0.36)",
+  "--pf-rating-solid": "#291353",
+  "--pf-rating-border-strong": "#5E3AAB",
+  "--pf-tag-bg": "rgba(211,182,255,0.10)",
+  "--pf-tag-text": "#E4D4FF",
+  "--pf-tag-border": "rgba(211,182,255,0.22)",
+  "--pf-meta": "#8A79B4",
+  "--pf-overlay-from": "rgba(18,7,39,0.94)",
+  "--pf-overlay-via": "rgba(18,7,39,0.58)",
+  "--pf-glass-surface": "rgba(211, 182, 255, 0.07)",
+  "--pf-glass-border": "rgba(211, 182, 255, 0.16)",
+  "--pf-glass-highlight": "rgba(211, 182, 255, 0.10)",
+  "--pf-glass-sheen": "rgba(211, 182, 255, 0.20)",
+  "--pf-glass-blur": "16px",
 };
 
-/** Cherry Cola — near-black with oxblood, deep cherry, and warm rose. */
-const CHERRY_TOKENS: ProfileTokens = {
-  "--pf-bg": "#0C0608",
-  "--pf-surface-1": "#140A0D",
-  "--pf-surface-2": "#1C0E12",
-  "--pf-surface-3": "#261317",
-  "--pf-text-strong": "#FDEEEE",
-  "--pf-text": "#F0D8D8",
-  "--pf-text-muted": "#C09898",
-  "--pf-text-faint": "#8A6565",
-  "--pf-border": "rgba(228,150,150,0.12)",
-  "--pf-border-strong": "rgba(228,150,150,0.22)",
-  "--pf-accent": "#E4969A",
-  "--pf-accent-strong": "#D26A70",
-  "--pf-accent-fg": "#1A0709",
-  "--pf-accent-soft": "rgba(228,150,150,0.16)",
-  "--pf-hover": "rgba(228,150,150,0.12)",
-  "--pf-focus-ring": "rgba(228,150,150,0.58)",
-  "--pf-rating": "#F0A8AB",
-  "--pf-rating-bg": "rgba(228,150,150,0.14)",
-  "--pf-rating-border": "rgba(228,150,150,0.34)",
-  "--pf-rating-solid": "#221014",
-  "--pf-rating-border-strong": "#78373D",
-  "--pf-tag-bg": "rgba(228,150,150,0.09)",
-  "--pf-tag-text": "#EFCFCE",
-  "--pf-tag-border": "rgba(228,150,150,0.22)",
-  "--pf-meta": "#97706F",
-  "--pf-overlay-from": "rgba(12,6,8,0.94)",
-  "--pf-overlay-via": "rgba(12,6,8,0.58)",
+/**
+ * Electric Cobalt — vivid blue on a deep navy ground.
+ *
+ * Blue, not violet: the accent skews towards azure (`#4DA3FF`) rather than
+ * towards the purple end, and the surfaces are navy rather than near-black.
+ */
+const COBALT_TOKENS: ProfileTokens = {
+  "--pf-bg": "#04101F",
+  "--pf-surface-1": "#071A31",
+  "--pf-surface-2": "#0B2445",
+  "--pf-surface-3": "#10305C",
+  "--pf-text-strong": "#EAF3FF",
+  "--pf-text": "#CFE2FA",
+  "--pf-text-muted": "#8FADD4",
+  "--pf-text-faint": "#5C7DA6",
+  "--pf-border": "rgba(147,197,255,0.14)",
+  "--pf-border-strong": "rgba(147,197,255,0.26)",
+  "--pf-accent": "#93C5FF",
+  "--pf-accent-strong": "#4DA3FF",
+  "--pf-accent-fg": "#04101F",
+  "--pf-accent-soft": "rgba(77,163,255,0.16)",
+  "--pf-hover": "rgba(77,163,255,0.12)",
+  "--pf-focus-ring": "rgba(77,163,255,0.62)",
+  "--pf-rating": "#B6D6FF",
+  "--pf-rating-bg": "rgba(77,163,255,0.14)",
+  "--pf-rating-border": "rgba(77,163,255,0.36)",
+  "--pf-rating-solid": "#0B2445",
+  "--pf-rating-border-strong": "#1E5C9E",
+  "--pf-tag-bg": "rgba(147,197,255,0.10)",
+  "--pf-tag-text": "#CFE4FF",
+  "--pf-tag-border": "rgba(147,197,255,0.22)",
+  "--pf-meta": "#6B8CB4",
+  "--pf-overlay-from": "rgba(4,16,31,0.94)",
+  "--pf-overlay-via": "rgba(4,16,31,0.58)",
+  "--pf-glass-surface": "rgba(147, 197, 255, 0.07)",
+  "--pf-glass-border": "rgba(147, 197, 255, 0.16)",
+  "--pf-glass-highlight": "rgba(147, 197, 255, 0.10)",
+  "--pf-glass-sheen": "rgba(147, 197, 255, 0.20)",
+  "--pf-glass-blur": "16px",
 };
 
-/** Silver Screen — monochrome charcoal, silver accents, editorial contrast. */
+/**
+ * Oxblood — burgundy and oxblood.
+ *
+ * This is the retained palette for BOTH of the old burgundy presets
+ * (`rose-noir` and `cherry-cola`). It is warmer and more saturated than
+ * either of them was: the ground is a deep oxblood rather than neutral
+ * near-black, and the accent is a warm coral rather than a dusty pink.
+ */
+const OXBLOOD_TOKENS: ProfileTokens = {
+  "--pf-bg": "#0F0708",
+  "--pf-surface-1": "#180B0D",
+  "--pf-surface-2": "#220F12",
+  "--pf-surface-3": "#2E1519",
+  "--pf-text-strong": "#FCEEEE",
+  "--pf-text": "#F0D7D6",
+  "--pf-text-muted": "#C19795",
+  "--pf-text-faint": "#8B6462",
+  "--pf-border": "rgba(246,185,174,0.12)",
+  "--pf-border-strong": "rgba(246,185,174,0.24)",
+  "--pf-accent": "#F6B9AE",
+  "--pf-accent-strong": "#E49182",
+  "--pf-accent-fg": "#180B0D",
+  "--pf-accent-soft": "rgba(228,145,130,0.16)",
+  "--pf-hover": "rgba(228,145,130,0.12)",
+  "--pf-focus-ring": "rgba(228,145,130,0.60)",
+  "--pf-rating": "#FACBC1",
+  "--pf-rating-bg": "rgba(228,145,130,0.14)",
+  "--pf-rating-border": "rgba(228,145,130,0.36)",
+  "--pf-rating-solid": "#2A1216",
+  "--pf-rating-border-strong": "#7A3E39",
+  "--pf-tag-bg": "rgba(246,185,174,0.09)",
+  "--pf-tag-text": "#F2DAD7",
+  "--pf-tag-border": "rgba(246,185,174,0.22)",
+  "--pf-meta": "#97716F",
+  "--pf-overlay-from": "rgba(15,7,8,0.94)",
+  "--pf-overlay-via": "rgba(15,7,8,0.58)",
+  "--pf-glass-surface": "rgba(246, 185, 174, 0.06)",
+  "--pf-glass-border": "rgba(246, 185, 174, 0.15)",
+  "--pf-glass-highlight": "rgba(246, 185, 174, 0.09)",
+  "--pf-glass-sheen": "rgba(246, 185, 174, 0.18)",
+  "--pf-glass-blur": "15px",
+};
+
+/**
+ * Deep Moss — the retained palette for the old `forest-dark`.
+ *
+ * Green, but a *mossy* green rather than the old sage-on-black: the accent
+ * is a yellow-green, the ground is a green-black, and the elevated surfaces
+ * are visibly green.
+ */
+const MOSS_TOKENS: ProfileTokens = {
+  "--pf-bg": "#06100A",
+  "--pf-surface-1": "#0A1911",
+  "--pf-surface-2": "#0F2419",
+  "--pf-surface-3": "#163121",
+  "--pf-text-strong": "#EEF6EF",
+  "--pf-text": "#D5E6D9",
+  "--pf-text-muted": "#90AC98",
+  "--pf-text-faint": "#617C6C",
+  "--pf-border": "rgba(198,231,168,0.12)",
+  "--pf-border-strong": "rgba(198,231,168,0.24)",
+  "--pf-accent": "#C6E7A8",
+  "--pf-accent-strong": "#9FCB7A",
+  "--pf-accent-fg": "#06100A",
+  "--pf-accent-soft": "rgba(159,203,122,0.15)",
+  "--pf-hover": "rgba(159,203,122,0.11)",
+  "--pf-focus-ring": "rgba(159,203,122,0.58)",
+  "--pf-rating": "#D6EFBE",
+  "--pf-rating-bg": "rgba(159,203,122,0.14)",
+  "--pf-rating-border": "rgba(159,203,122,0.34)",
+  "--pf-rating-solid": "#132A1B",
+  "--pf-rating-border-strong": "#3C6338",
+  "--pf-tag-bg": "rgba(198,231,168,0.09)",
+  "--pf-tag-text": "#DBEDCE",
+  "--pf-tag-border": "rgba(198,231,168,0.20)",
+  "--pf-meta": "#6E8878",
+  "--pf-overlay-from": "rgba(6,16,10,0.94)",
+  "--pf-overlay-via": "rgba(6,16,10,0.58)",
+  "--pf-glass-surface": "rgba(198, 231, 168, 0.06)",
+  "--pf-glass-border": "rgba(198, 231, 168, 0.15)",
+  "--pf-glass-highlight": "rgba(198, 231, 168, 0.09)",
+  "--pf-glass-sheen": "rgba(198, 231, 168, 0.18)",
+  "--pf-glass-blur": "15px",
+};
+
+/**
+ * Silver Screen — true monochrome.
+ *
+ * No hue anywhere: the "accent" is a silver grey. The rating chip and the
+ * tags are grey too, which is the point — this palette proves the whole
+ * profile can be built without a single hue.
+ */
 const SILVER_TOKENS: ProfileTokens = {
-  "--pf-bg": "#0A0A0A",
-  "--pf-surface-1": "#111111",
-  "--pf-surface-2": "#181818",
-  "--pf-surface-3": "#212121",
+  "--pf-bg": "#08080A",
+  "--pf-surface-1": "#0F0F11",
+  "--pf-surface-2": "#161618",
+  "--pf-surface-3": "#1E1E21",
   "--pf-text-strong": "#FAFAFA",
   "--pf-text": "#E4E4E4",
   "--pf-text-muted": "#A3A3A3",
   "--pf-text-faint": "#6E6E6E",
   "--pf-border": "rgba(255,255,255,0.11)",
   "--pf-border-strong": "rgba(255,255,255,0.22)",
-  "--pf-accent": "#D4D4D4",
-  "--pf-accent-strong": "#B0B0B0",
-  "--pf-accent-fg": "#0A0A0A",
+  "--pf-accent": "#EDEDED",
+  "--pf-accent-strong": "#D4D4D4",
+  "--pf-accent-fg": "#08080A",
   "--pf-accent-soft": "rgba(255,255,255,0.13)",
   "--pf-hover": "rgba(255,255,255,0.09)",
   "--pf-focus-ring": "rgba(255,255,255,0.72)",
@@ -335,115 +350,195 @@ const SILVER_TOKENS: ProfileTokens = {
   "--pf-tag-text": "#DCDCDC",
   "--pf-tag-border": "rgba(255,255,255,0.16)",
   "--pf-meta": "#7C7C7C",
-  "--pf-overlay-from": "rgba(10,10,10,0.94)",
-  "--pf-overlay-via": "rgba(10,10,10,0.60)",
+  "--pf-overlay-from": "rgba(8,8,10,0.94)",
+  "--pf-overlay-via": "rgba(8,8,10,0.60)",
+  "--pf-glass-surface": "rgba(255, 255, 255, 0.06)",
+  "--pf-glass-border": "rgba(255, 255, 255, 0.14)",
+  "--pf-glass-highlight": "rgba(255, 255, 255, 0.08)",
+  "--pf-glass-sheen": "rgba(255, 255, 255, 0.12)",
+  "--pf-glass-blur": "14px",
 };
 
-/** Amber Film — warm near-black, muted amber and sepia. */
+/**
+ * Amber Film — warm sepia near-black.
+ *
+ * The warmth is in the *ground*, not only in the accent: every surface is a
+ * brown-black, so the page reads as projected film rather than as a dark UI
+ * with an orange button.
+ */
 const AMBER_TOKENS: ProfileTokens = {
-  "--pf-bg": "#0D0904",
-  "--pf-surface-1": "#15100A",
-  "--pf-surface-2": "#1D160D",
-  "--pf-surface-3": "#271E12",
-  "--pf-text-strong": "#FBF2E2",
-  "--pf-text": "#EBDDC5",
-  "--pf-text-muted": "#BFAA88",
-  "--pf-text-faint": "#8A795E",
-  "--pf-border": "rgba(226,178,110,0.12)",
-  "--pf-border-strong": "rgba(226,178,110,0.22)",
-  "--pf-accent": "#E2B26E",
-  "--pf-accent-strong": "#C99450",
-  "--pf-accent-fg": "#170F05",
-  "--pf-accent-soft": "rgba(226,178,110,0.16)",
-  "--pf-hover": "rgba(226,178,110,0.11)",
-  "--pf-focus-ring": "rgba(226,178,110,0.58)",
-  "--pf-rating": "#EFC086",
-  "--pf-rating-bg": "rgba(226,178,110,0.14)",
-  "--pf-rating-border": "rgba(226,178,110,0.34)",
-  "--pf-rating-solid": "#1D160C",
+  "--pf-bg": "#0F0A05",
+  "--pf-surface-1": "#17110A",
+  "--pf-surface-2": "#20180E",
+  "--pf-surface-3": "#2B2114",
+  "--pf-text-strong": "#FCF4E6",
+  "--pf-text": "#EEDFC9",
+  "--pf-text-muted": "#C4AC8B",
+  "--pf-text-faint": "#8E7B60",
+  "--pf-border": "rgba(233,181,113,0.12)",
+  "--pf-border-strong": "rgba(233,181,113,0.24)",
+  "--pf-accent": "#F6CE96",
+  "--pf-accent-strong": "#E9B571",
+  "--pf-accent-fg": "#17110A",
+  "--pf-accent-soft": "rgba(233,181,113,0.16)",
+  "--pf-hover": "rgba(233,181,113,0.11)",
+  "--pf-focus-ring": "rgba(233,181,113,0.58)",
+  "--pf-rating": "#F8D9A9",
+  "--pf-rating-bg": "rgba(233,181,113,0.14)",
+  "--pf-rating-border": "rgba(233,181,113,0.34)",
+  "--pf-rating-solid": "#261C0F",
   "--pf-rating-border-strong": "#6E532A",
-  "--pf-tag-bg": "rgba(226,178,110,0.09)",
-  "--pf-tag-text": "#E8D6B4",
-  "--pf-tag-border": "rgba(226,178,110,0.20)",
-  "--pf-meta": "#8F7C5D",
-  "--pf-overlay-from": "rgba(13,9,4,0.94)",
-  "--pf-overlay-via": "rgba(13,9,4,0.58)",
+  "--pf-tag-bg": "rgba(233,181,113,0.09)",
+  "--pf-tag-text": "#EEDDC0",
+  "--pf-tag-border": "rgba(233,181,113,0.20)",
+  "--pf-meta": "#9A8566",
+  "--pf-overlay-from": "rgba(15,10,5,0.94)",
+  "--pf-overlay-via": "rgba(15,10,5,0.58)",
+  "--pf-glass-surface": "rgba(233, 181, 113, 0.06)",
+  "--pf-glass-border": "rgba(233, 181, 113, 0.15)",
+  "--pf-glass-highlight": "rgba(233, 181, 113, 0.09)",
+  "--pf-glass-sheen": "rgba(233, 181, 113, 0.18)",
+  "--pf-glass-blur": "15px",
 };
 
-/** Arctic Tide — blue-teal ground with cool ice accents. */
+/**
+ * Arctic Tide — teal and icy blue.
+ *
+ * Cyan-leaning rather than blue-leaning: the accent is `#5FD2DE`, and the
+ * surfaces are blue-green. It is the only truly *cold* coloured palette in
+ * the collection, which is what separates it from Cobalt.
+ */
 const ARCTIC_TOKENS: ProfileTokens = {
-  "--pf-bg": "#04090E",
-  "--pf-surface-1": "#081119",
-  "--pf-surface-2": "#0C1922",
-  "--pf-surface-3": "#12232E",
-  "--pf-text-strong": "#EAF6FA",
-  "--pf-text": "#CDE3EC",
-  "--pf-text-muted": "#8CAAB8",
-  "--pf-text-faint": "#5C7884",
-  "--pf-border": "rgba(150,214,232,0.12)",
-  "--pf-border-strong": "rgba(150,214,232,0.22)",
-  "--pf-accent": "#96D6E8",
-  "--pf-accent-strong": "#6BBED4",
-  "--pf-accent-fg": "#04121A",
-  "--pf-accent-soft": "rgba(150,214,232,0.15)",
-  "--pf-hover": "rgba(150,214,232,0.11)",
-  "--pf-focus-ring": "rgba(150,214,232,0.60)",
-  "--pf-rating": "#A8DEEC",
-  "--pf-rating-bg": "rgba(150,214,232,0.14)",
-  "--pf-rating-border": "rgba(150,214,232,0.34)",
-  "--pf-rating-solid": "#0A1A24",
-  "--pf-rating-border-strong": "#2C5A6D",
-  "--pf-tag-bg": "rgba(150,214,232,0.09)",
-  "--pf-tag-text": "#C2DEE9",
-  "--pf-tag-border": "rgba(150,214,232,0.20)",
-  "--pf-meta": "#6B8A97",
-  "--pf-overlay-from": "rgba(4,9,14,0.94)",
-  "--pf-overlay-via": "rgba(4,9,14,0.58)",
+  "--pf-bg": "#041013",
+  "--pf-surface-1": "#08191E",
+  "--pf-surface-2": "#0B242B",
+  "--pf-surface-3": "#0F333C",
+  "--pf-text-strong": "#EAF7FA",
+  "--pf-text": "#C9E6EC",
+  "--pf-text-muted": "#87ABB4",
+  "--pf-text-faint": "#5A7F88",
+  "--pf-border": "rgba(168,232,240,0.12)",
+  "--pf-border-strong": "rgba(168,232,240,0.24)",
+  "--pf-accent": "#A8E8F0",
+  "--pf-accent-strong": "#5FD2DE",
+  "--pf-accent-fg": "#041013",
+  "--pf-accent-soft": "rgba(95,210,222,0.15)",
+  "--pf-hover": "rgba(95,210,222,0.11)",
+  "--pf-focus-ring": "rgba(95,210,222,0.60)",
+  "--pf-rating": "#BCEEF4",
+  "--pf-rating-bg": "rgba(95,210,222,0.14)",
+  "--pf-rating-border": "rgba(95,210,222,0.34)",
+  "--pf-rating-solid": "#0C2730",
+  "--pf-rating-border-strong": "#2E6A76",
+  "--pf-tag-bg": "rgba(168,232,240,0.09)",
+  "--pf-tag-text": "#C8E9EF",
+  "--pf-tag-border": "rgba(168,232,240,0.20)",
+  "--pf-meta": "#6B8F98",
+  "--pf-overlay-from": "rgba(4,16,19,0.94)",
+  "--pf-overlay-via": "rgba(4,16,19,0.58)",
+  "--pf-glass-surface": "rgba(168, 232, 240, 0.06)",
+  "--pf-glass-border": "rgba(168, 232, 240, 0.15)",
+  "--pf-glass-highlight": "rgba(168, 232, 240, 0.09)",
+  "--pf-glass-sheen": "rgba(168, 232, 240, 0.18)",
+  "--pf-glass-blur": "15px",
 };
 
-/** Soft Sage — a genuine light theme: warm off-white, sage ink, dark text. */
-const SAGE_TOKENS: ProfileTokens = {
-  "--pf-bg": "#F2F4EE",
-  "--pf-surface-1": "#F8FAF5",
-  "--pf-surface-2": "#EAEEE4",
-  "--pf-surface-3": "#DCE2D4",
-  "--pf-text-strong": "#1D241C",
-  "--pf-text": "#2C352A",
-  "--pf-text-muted": "#55604F",
-  "--pf-text-faint": "#7E8A76",
-  "--pf-border": "rgba(29,36,28,0.12)",
-  "--pf-border-strong": "rgba(29,36,28,0.22)",
-  "--pf-accent": "#40684A",
-  "--pf-accent-strong": "#2F5138",
+/**
+ * Terracotta — warm clay and rust.
+ *
+ * A *second* warm palette alongside Amber, and deliberately further from it:
+ * Amber is sepia and brown-black, Terracotta is orange-red clay with a
+ * visibly red ground. They are not the same palette with a different accent.
+ */
+const TERRACOTTA_TOKENS: ProfileTokens = {
+  "--pf-bg": "#150C08",
+  "--pf-surface-1": "#1E120C",
+  "--pf-surface-2": "#291811",
+  "--pf-surface-3": "#362117",
+  "--pf-text-strong": "#FCEFE6",
+  "--pf-text": "#F0DCCC",
+  "--pf-text-muted": "#C7A892",
+  "--pf-text-faint": "#917C68",
+  "--pf-border": "rgba(227,155,107,0.13)",
+  "--pf-border-strong": "rgba(227,155,107,0.26)",
+  "--pf-accent": "#F6C09B",
+  "--pf-accent-strong": "#E39B6B",
+  "--pf-accent-fg": "#1E120C",
+  "--pf-accent-soft": "rgba(227,155,107,0.16)",
+  "--pf-hover": "rgba(227,155,107,0.12)",
+  "--pf-focus-ring": "rgba(227,155,107,0.60)",
+  "--pf-rating": "#FAD3B4",
+  "--pf-rating-bg": "rgba(227,155,107,0.14)",
+  "--pf-rating-border": "rgba(227,155,107,0.36)",
+  "--pf-rating-solid": "#2E1A11",
+  "--pf-rating-border-strong": "#7A4A2C",
+  "--pf-tag-bg": "rgba(227,155,107,0.09)",
+  "--pf-tag-text": "#F2DDC9",
+  "--pf-tag-border": "rgba(227,155,107,0.22)",
+  "--pf-meta": "#A0826C",
+  "--pf-overlay-from": "rgba(21,12,8,0.94)",
+  "--pf-overlay-via": "rgba(21,12,8,0.58)",
+  "--pf-glass-surface": "rgba(227, 155, 107, 0.07)",
+  "--pf-glass-border": "rgba(227, 155, 107, 0.16)",
+  "--pf-glass-highlight": "rgba(227, 155, 107, 0.10)",
+  "--pf-glass-sheen": "rgba(227, 155, 107, 0.19)",
+  "--pf-glass-blur": "15px",
+};
+
+/**
+ * Porcelain — the light theme.
+ *
+ * A genuinely light page: paper-white ground, warm off-white surfaces, deep
+ * ink text, and a clay-toned accent. It is not a dark theme with a lighter
+ * header — the *background* is light, the text is dark, and the borders are
+ * ink-on-paper.
+ */
+const PORCELAIN_TOKENS: ProfileTokens = {
+  "--pf-bg": "#F4F1EA",
+  "--pf-surface-1": "#FBF9F4",
+  "--pf-surface-2": "#EFEBE1",
+  "--pf-surface-3": "#E2DDD0",
+  "--pf-text-strong": "#1B1A18",
+  "--pf-text": "#2C2A26",
+  "--pf-text-muted": "#5C5850",
+  "--pf-text-faint": "#8A857A",
+  "--pf-border": "rgba(27,26,24,0.12)",
+  "--pf-border-strong": "rgba(27,26,24,0.22)",
+  "--pf-accent": "#B4552A",
+  "--pf-accent-strong": "#9C4520",
   "--pf-accent-fg": "#FFFFFF",
-  "--pf-accent-soft": "rgba(64,104,74,0.10)",
-  "--pf-hover": "rgba(64,104,74,0.08)",
-  "--pf-focus-ring": "rgba(64,104,74,0.55)",
-  "--pf-rating": "#2F5138",
-  "--pf-rating-bg": "rgba(64,104,74,0.09)",
-  "--pf-rating-border": "rgba(64,104,74,0.28)",
+  "--pf-accent-soft": "rgba(180,85,42,0.10)",
+  "--pf-hover": "rgba(180,85,42,0.08)",
+  "--pf-focus-ring": "rgba(180,85,42,0.50)",
+  "--pf-rating": "#8A3C1A",
+  "--pf-rating-bg": "rgba(180,85,42,0.09)",
+  "--pf-rating-border": "rgba(180,85,42,0.28)",
   "--pf-rating-solid": "#FFFFFF",
-  "--pf-rating-border-strong": "#5A8464",
-  "--pf-tag-bg": "rgba(29,36,28,0.045)",
-  "--pf-tag-text": "#37422F",
-  "--pf-tag-border": "rgba(29,36,28,0.14)",
-  "--pf-meta": "#6E7A66",
-  "--pf-overlay-from": "rgba(248,250,245,0.94)",
-  "--pf-overlay-via": "rgba(248,250,245,0.62)",
+  "--pf-rating-border-strong": "#A85C33",
+  "--pf-tag-bg": "rgba(27,26,24,0.045)",
+  "--pf-tag-text": "#3A3833",
+  "--pf-tag-border": "rgba(27,26,24,0.14)",
+  "--pf-meta": "#7A7568",
+  "--pf-overlay-from": "rgba(251,249,244,0.94)",
+  "--pf-overlay-via": "rgba(251,249,244,0.62)",
+  "--pf-glass-surface": "rgba(255, 255, 255, 0.62)",
+  "--pf-glass-border": "rgba(27, 26, 24, 0.10)",
+  "--pf-glass-highlight": "rgba(255, 255, 255, 0.85)",
+  "--pf-glass-sheen": "rgba(255, 255, 255, 0.72)",
+  "--pf-glass-blur": "12px",
 };
 
 export const PROFILE_TOKENS_BY_THEME: Record<ThemeId, ProfileTokens> = {
   obsidian: OBSIDIAN_TOKENS,
   violet: VIOLET_TOKENS,
-  midnight: MIDNIGHT_TOKENS,
-  "rose-noir": ROSE_TOKENS,
-  paper: PAPER_TOKENS,
-  "forest-dark": FOREST_TOKENS,
-  "cherry-cola": CHERRY_TOKENS,
-  "silver-screen": SILVER_TOKENS,
-  "amber-film": AMBER_TOKENS,
-  "arctic-tide": ARCTIC_TOKENS,
-  "soft-sage": SAGE_TOKENS,
+  cobalt: COBALT_TOKENS,
+  oxblood: OXBLOOD_TOKENS,
+  moss: MOSS_TOKENS,
+  silver: SILVER_TOKENS,
+  amber: AMBER_TOKENS,
+  arctic: ARCTIC_TOKENS,
+  terracotta: TERRACOTTA_TOKENS,
+  porcelain: PORCELAIN_TOKENS,
 };
 
 /** True when a theme is a light theme (drives scrollbar + form control colors). */
@@ -585,19 +680,79 @@ export const TYPOGRAPHY_PRESETS: Record<TypographyId, TypographyPreset> = {
     displayScale: 1.08,
     displayWeight: 600,
   },
+
+  /* ---- Pre-Phase 11: four new voices ----------------------------------
+   *
+   * Each one introduces a family the project had never loaded, so the choice
+   * changes the *shapes* on the page rather than only the metrics. They are
+   * deliberately spread across the four axes the brief names: neo-geometric,
+   * expressive literary serif, warm humanist sans, and experimental display.
+   */
+  sora: {
+    id: "sora",
+    name: "Sora",
+    description:
+      "Sora headings — neo-geometric and futuristic, with Inter body copy.",
+    display: `var(--font-sora), ui-sans-serif, system-ui, sans-serif`,
+    body: `var(--font-sans), ui-sans-serif, system-ui, sans-serif`,
+    meta: `var(--font-sans), ui-sans-serif, system-ui, sans-serif`,
+    displayTracking: "-0.02em",
+    displayScale: 1.04,
+    displayWeight: 600,
+  },
+  fraunces: {
+    id: "fraunces",
+    name: "Fraunces",
+    description:
+      "Fraunces headings — an expressive literary serif with real personality.",
+    display: `var(--font-fraunces), ui-serif, Georgia, serif`,
+    body: `var(--font-sans), ui-sans-serif, system-ui, sans-serif`,
+    meta: `var(--font-sans), ui-sans-serif, system-ui, sans-serif`,
+    displayTracking: "-0.012em",
+    displayScale: 1.18,
+    displayWeight: 600,
+  },
+  jakarta: {
+    id: "jakarta",
+    name: "Plus Jakarta",
+    description:
+      "Plus Jakarta Sans throughout — warm humanist shapes, friendly and readable.",
+    display: `var(--font-jakarta), ui-sans-serif, system-ui, sans-serif`,
+    body: `var(--font-jakarta), ui-sans-serif, system-ui, sans-serif`,
+    meta: `var(--font-jakarta), ui-sans-serif, system-ui, sans-serif`,
+    displayTracking: "-0.026em",
+    displayScale: 1.06,
+    displayWeight: 700,
+  },
+  bricolage: {
+    id: "bricolage",
+    name: "Bricolage",
+    description:
+      "Bricolage Grotesque display — bold art direction, with DM Sans body copy.",
+    display: `var(--font-bricolage), ui-sans-serif, system-ui, sans-serif`,
+    body: `var(--font-dm-sans), ui-sans-serif, system-ui, sans-serif`,
+    meta: `var(--font-plex-mono), ui-monospace, monospace`,
+    displayTracking: "-0.045em",
+    displayScale: 1.12,
+    displayWeight: 800,
+  },
 };
 
 export const TYPOGRAPHY_LIST: TypographyPreset[] = [
-  /* Phase 3 — preserved. */
+  /* The eight that shipped before this phase — preserved exactly. */
   TYPOGRAPHY_PRESETS.serif,
   TYPOGRAPHY_PRESETS.modern,
   TYPOGRAPHY_PRESETS["mono-led"],
-  /* Phase 4.3 — five new voices. */
   TYPOGRAPHY_PRESETS.contemporary,
   TYPOGRAPHY_PRESETS["soft-editorial"],
   TYPOGRAPHY_PRESETS.manrope,
   TYPOGRAPHY_PRESETS.archive,
   TYPOGRAPHY_PRESETS.playful,
+  /* Pre-Phase 11 — four new voices. */
+  TYPOGRAPHY_PRESETS.sora,
+  TYPOGRAPHY_PRESETS.fraunces,
+  TYPOGRAPHY_PRESETS.jakarta,
+  TYPOGRAPHY_PRESETS.bricolage,
 ];
 
 /* -------------------------------------------------------------------------- */
@@ -693,11 +848,6 @@ export const BACKGROUND_OPTIONS: Array<{
     name: "Gradient",
     description: "Soft accent lift behind the top of the page.",
   },
-  {
-    id: "paper-grain",
-    name: "Paper",
-    description: "Fine grain texture over the surface colour.",
-  },
 ];
 
 /* -------------------------------------------------------------------------- */
@@ -762,9 +912,6 @@ export function profileScopeStyle(input: {
 }
 
 function backgroundImage(bg: BackgroundTreatment, theme: ThemeId): string {
-  if (bg === "paper-grain") {
-    return `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.35'/></svg>")`;
-  }
   if (bg === "gradient") {
     const accent = PROFILE_TOKENS_BY_THEME[theme]["--pf-accent"];
     return `radial-gradient(70% 46% at 50% 0%, color-mix(in oklab, ${accent} 16%, transparent), transparent 72%)`;
@@ -777,22 +924,19 @@ export const PROFILE_SCOPE_CLASS = "profile-scope";
 
 /** Re-exported so consumers can build the theme id list without importing lib/theme. */
 export const THEME_IDS_ALL: ThemeId[] = [
-  /* Phase 3 — preserved. */
   "obsidian",
   "violet",
-  "midnight",
-  "rose-noir",
-  "paper",
-  /* Phase 4.3 — six new palettes. */
-  "forest-dark",
-  "cherry-cola",
-  "silver-screen",
-  "amber-film",
-  "arctic-tide",
-  "soft-sage",
+  "cobalt",
+  "oxblood",
+  "moss",
+  "silver",
+  "amber",
+  "arctic",
+  "terracotta",
+  "porcelain",
 ];
 
 /** Themes whose body surface is light — used to flip form/scrollbar colours. */
-export const LIGHT_THEMES: ThemeId[] = ["paper", "soft-sage"];
+export const LIGHT_THEMES: ThemeId[] = ["porcelain"];
 
 export type { ThemeId, TypographyId, LayoutPreset, BackgroundTreatment, ThemePreset };

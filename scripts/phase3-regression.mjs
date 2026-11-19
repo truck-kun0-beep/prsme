@@ -96,7 +96,22 @@ if (data) {
   for (const id of ["appearance", "identity", "collections", "sections", "soundtrack", "privacy"]) {
     ok(`Studio tab '${id}' present (DOM probe)`, data.panelTabs.includes(`studio-tab-${id}`), `tabs=${data.panelTabs.join(",")}`);
   }
-  for (const id of ["obsidian", "violet", "midnight", "rose-noir", "paper"]) {
+  /*
+   * The curated theme ids.
+   *
+   * PRE-PHASE 11 — the palette collection was curated down to ten distinct
+   * identities, and the ids changed with it: `midnight` became `cobalt`,
+   * `rose-noir` became `oxblood`, and the light theme is now `porcelain`
+   * (which absorbed `paper` and `soft-sage`). The old ids are still accepted
+   * as legacy ALIASES for a saved profile — see `LEGACY_THEME_ALIASES` in
+   * `lib/theme.ts` — but they are no longer cards in the studio, so they are
+   * no longer asserted here.
+   *
+   * The list below is deliberately the FIRST FIVE curated ids rather than
+   * every one of the ten: this suite checks that the picker renders and is
+   * selectable, not that it is exhaustive.
+   */
+  for (const id of ["obsidian", "violet", "cobalt", "oxblood", "porcelain"]) {
     ok(`Theme preset '${id}' is selectable (DOM probe)`, data.themeCards.includes(`studio-theme-${id}`), `themes=${data.themeCards.join(",")}`);
   }
   for (const id of ["amber", "iris", "rose", "cyan", "forest", "sand", "mono", "violet", "rust"]) {

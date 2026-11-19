@@ -9,6 +9,10 @@ import {
   Manrope,
   IBM_Plex_Mono,
   Outfit,
+  Sora,
+  Fraunces,
+  Plus_Jakarta_Sans,
+  Bricolage_Grotesque,
 } from "next/font/google";
 import "./globals.css";
 import { THEME_BOOT_SCRIPT } from "@/lib/themeBoot";
@@ -88,6 +92,47 @@ const outfit = Outfit({
   display: "swap",
 });
 
+/* ---- Pre-Phase 11 typography additions ----
+ *
+ * Four new typography presets, each needing at least one family the project
+ * did not already ship. They are declared here rather than in the presets so
+ * `next/font` owns every download, self-hosting, and preload hint — the
+ * profile never requests a stylesheet from a third party at runtime.
+ *
+ * Weights are the minimum each role needs:
+ *   - Sora                600 — heading weight only
+ *   - Fraunces           600 — heading weight only
+ *   - Plus Jakarta Sans   400/500/700 — it is also the body face
+ *   - Bricolage Grotesque 800 — the single heavy display weight
+ */
+const sora = Sora({
+  subsets: ["latin"],
+  weight: ["600"],
+  variable: "--font-sora",
+  display: "swap",
+});
+
+const fraunces = Fraunces({
+  subsets: ["latin"],
+  weight: ["600"],
+  variable: "--font-fraunces",
+  display: "swap",
+});
+
+const jakarta = Plus_Jakarta_Sans({
+  subsets: ["latin"],
+  weight: ["400", "500", "700"],
+  variable: "--font-jakarta",
+  display: "swap",
+});
+
+const bricolage = Bricolage_Grotesque({
+  subsets: ["latin"],
+  weight: ["800"],
+  variable: "--font-bricolage",
+  display: "swap",
+});
+
 export const metadata: Metadata = {
   metadataBase: new URL("https://prsme.local"),
   title: {
@@ -138,7 +183,9 @@ export default function RootLayout({
       className={
         `${inter.variable} ${display.variable} ${mono.variable} ` +
         `${grotesk.variable} ${cormorant.variable} ${dmSans.variable} ` +
-        `${manrope.variable} ${plexMono.variable} ${outfit.variable}`
+        `${manrope.variable} ${plexMono.variable} ${outfit.variable} ` +
+        `${sora.variable} ${fraunces.variable} ${jakarta.variable} ` +
+        `${bricolage.variable}`
       }
       data-theme="obsidian"
       suppressHydrationWarning

@@ -25,6 +25,7 @@
 import Link from "next/link";
 import { Artwork } from "@/components/Artwork";
 import { RatingBadge } from "@/components/RatingBadge";
+import { ListButton } from "@/components/list/ListButton";
 import type { Review, MediaItem } from "@/lib/supabase/reviews";
 import { MEDIA_KIND_LABELS, MEDIA_PROVIDER_LABELS, type MediaKindId } from "@/lib/media/types";
 
@@ -83,21 +84,39 @@ function paletteForMedia(media: MediaItem | null) {
 /**
  * A media tile — the artwork, title, kind, and optional community score.
  *
- * Used by the Popular Media shelf. The whole tile links to the media page, so
- * a reader can get from a shelf to the reviews of one work in one click.
+ * Used by the Popular Media shelf and by the catalogue search results. The
+ * whole tile links to the media page, so a reader can get from a shelf to the
+ * reviews of one work in one click.
+ *
+ * PRE-PHASE 11 — the tile also carries the "Add to List" bookmark.
+ *
+ * The button sits OUTSIDE the tile's link, because a button inside a link is
+ * an interactive control nested in another interactive control: a keyboard
+ * user would tab into the bookmark and press Enter, and the browser would
+ * follow the link as well as pressing the button.
+ *
+ * The saved state is passed in from the server, so the control renders the
+ * right state on the first paint rather than guessing and correcting itself.
  */
 export function MediaTile({
   media,
   reviewCount,
   communityRating,
   ratingCount,
+  savedMediaIds,
 }: {
   media: MediaItem;
   reviewCount: number;
   communityRating: number | null;
   ratingCount: number;
+  /**
+   * The canonical media ids already on the signed-in user's list. Omit it and
+   * no bookmark is rendered — the catalogue has no personal context to show.
+   */
+  savedMediaIds?: string[];
 }) {
   const providerLabel = MEDIA_PROVIDER_LABELS[media.provider];
+  const showListButton = savedMediaIds !== undefined;
 
   return (
     <article className="group min-w-0" data-testid="media-tile">
@@ -157,6 +176,17 @@ export function MediaTile({
           Artwork and details from {providerLabel}
         </p>
       ) : null}
+
+      {showListButton ? (
+        <div className="mt-2">
+          <ListButton
+            mediaId={media.id}
+            title={media.title}
+            saved={savedMediaIds.includes(media.id)}
+            compact
+          />
+        </div>
+      ) : null}
     </article>
   );
 }
@@ -180,9 +210,16 @@ export function MediaTile({
 export function ReviewCard({
   review,
   showMedia = true,
+  savedMediaIds,
 }: {
   review: Review;
   showMedia?: boolean;
+  /**
+   * The canonical media ids already on the signed-in user's list. A review is
+   * never itself a list item — the canonical media record it points at is — so
+   * the bookmark is keyed on `media.id`.
+   */
+  savedMediaIds?: string[];
 }) {
   const media = review.media;
   const excerpt = truncateExcerpt(review.body, 320);
@@ -193,7 +230,7 @@ export function ReviewCard({
 
   return (
     <article
-      className="surface-card flex gap-4 p-4 sm:gap-5 sm:p-5"
+      className="glass-surface flex gap-4 p-4 sm:gap-5 sm:p-5"
       data-testid="review-card"
       data-review-id={review.id}
     >
@@ -308,6 +345,17 @@ export function ReviewCard({
             </span>
           ) : null}
         </p>
+
+        {savedMediaIds !== undefined && media ? (
+          <div className="mt-2.5">
+            <ListButton
+              mediaId={media.id}
+              title={media.title}
+              saved={savedMediaIds.includes(media.id)}
+              compact
+            />
+          </div>
+        ) : null}
       </div>
     </article>
   );

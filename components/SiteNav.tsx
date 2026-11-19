@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { Wordmark } from "./Wordmark";
 import { Button } from "./Button";
 import { useAccount } from "./auth/AccountProvider";
@@ -12,38 +11,37 @@ import { NotificationBell } from "./notifications/NotificationBell";
 /**
  * The primary navigation.
  *
- * Phase 6 — three entries, and each one goes somewhere real:
+ * PRE-PHASE 11 — three entries, and each one goes somewhere real:
  *
- *   - **Discover Reviews** → `/discover`. The real review-discovery page.
- *   - **Themes** → the landing page's themes section. The link is
- *     route-aware: on the landing page it is the in-page anchor `#themes`,
- *     and from any other route it is `/#themes`, so clicking Themes from
- *     `/discover` still lands on the themes section rather than doing nothing.
+ *   - **Discover** → `/discover`. The real review-discovery page. It used to
+ *     be called "Discover Reviews"; the product is the discovery surface
+ *     itself, so the label is now just "Discover".
+ *   - **List** → `/list`. The signed-in user's personal media queue. A guest
+ *     who follows it is sent to sign-in with a return path, rather than being
+ *     shown a broken page.
  *   - **About** → `/about`.
  *
- * "Taste" and "Share" were removed from the primary navigation. Sharing
- * remains an action on an individual profile (the Share button in the profile
- * header), and "Taste" was not a clear destination name for what is now the
- * Discover Reviews page.
+ * THEMES IS NOT A NAVIGATION ENTRY ANY MORE.
+ *
+ * Themes used to have their own primary entry. They are now a section of the
+ * About page (`/about#themes`), because a theme is a description of the
+ * product rather than a destination of its own — and a four-item primary
+ * navigation on a three-item product is a navigation that misrepresents the
+ * shape of the product.
+ *
+ * Old `/themes` links still work: that route redirects to `/about#themes`.
+ *
+ * "Taste" and "Share" were removed earlier. Sharing remains an action on an
+ * individual profile (the Share button in the profile header).
  */
 export function SiteNav() {
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement | null>(null);
-  const { status } = useAccount();
-  const pathname = usePathname();
-
-  /*
-   * The themes link is `#themes` on the landing page and `/#themes` from
-   * anywhere else. A bare `#themes` on another route would look for a
-   * fragment on that route's own page — where no such fragment exists — and
-   * the click would appear to do nothing.
-   */
-  const onLandingPage = pathname === "/";
-  const themesHref = onLandingPage ? "#themes" : "/#themes";
+  const { status, username } = useAccount();
 
   const navLinks = [
-    { href: "/discover", label: "Discover Reviews" },
-    { href: themesHref, label: "Themes" },
+    { href: "/discover", label: "Discover" },
+    { href: "/list", label: "List" },
     { href: "/about", label: "About" },
   ];
 
@@ -57,6 +55,16 @@ export function SiteNav() {
    * controls at either width.
    */
   const isAuthenticated = status === "authenticated";
+
+  /*
+   * The signed-in account's own public profile.
+   *
+   * The handle is the real one from the `profiles` table — resolved by the
+   * account provider — and never a hardcoded demo slug. Before it resolves,
+   * `profileHref` is null and the "View profile" button is simply absent
+   * rather than pointing somewhere wrong.
+   */
+  const profileHref = username ? `/u/${username}` : null;
 
   // Lock body scroll when the mobile panel is open.
   useEffect(() => {
@@ -193,8 +201,19 @@ export function SiteNav() {
             <div className="flex flex-col gap-2">
               {isAuthenticated ? (
                 <>
+                  {/*
+                   * PRE-PHASE 11 — the prominent action is "View profile",
+                   * pointing at the owner's own public page. The handle is the
+                   * real one from the `profiles` table, never a hardcoded
+                   * demo. The editor is one tap below it.
+                   */}
+                  {profileHref ? (
+                    <Button href={profileHref} variant="secondary" size="md" className="w-full">
+                      View profile
+                    </Button>
+                  ) : null}
                   <Button href="/studio" variant="secondary" size="md" className="w-full">
-                    Edit profile
+                    Customize profile
                   </Button>
                   <Button href="/account" size="md" className="w-full">
                     Account settings

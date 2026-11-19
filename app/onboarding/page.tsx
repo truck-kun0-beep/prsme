@@ -31,7 +31,21 @@ export default async function OnboardingPage() {
 
   const profile = await getProfileForUser();
   if (profile) {
-    redirect("/studio");
+    /*
+     * PRE-PHASE 11 — an account that already has a profile goes to Discover,
+     * not to the Studio.
+     *
+     * Discover is the product's default landing surface for a signed-in
+     * visitor, and onboarding is where people arrive *after* signing in. So
+     * this route doubles as the post-sign-in router: it sends an established
+     * account onward to Discover and only shows the creation form to an
+     * account that has nothing yet.
+     *
+     * That is also why the sign-in form's default destination is this page
+     * rather than Discover directly — this is the one place that can tell
+     * "you have a profile" from "you do not".
+     */
+    redirect("/discover");
   }
 
   return <OnboardingForm />;

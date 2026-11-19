@@ -25,7 +25,7 @@ import { clearStoredDraft } from "@/lib/profileDraft";
  * clipped by an ancestor's `overflow`.
  */
 export function AccountMenu() {
-  const { status, user, signOut } = useAccount();
+  const { status, user, signOut, username: profileUsername } = useAccount();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
@@ -97,7 +97,16 @@ export function AccountMenu() {
   const username = user?.user_metadata?.username as string | undefined;
   const displayName = (user?.user_metadata?.full_name as string | undefined) ?? "";
   const email = user?.email ?? "";
-  const label = username ?? displayName ?? "Account";
+  const label = profileUsername ?? username ?? displayName ?? "Account";
+
+  /*
+   * PRE-PHASE 11 — the profile handle comes from the application's own
+   * `profiles.username` column, because that is where onboarding writes it.
+   * `auth.users.raw_user_meta_data.username` is never written by this app, so
+   * it is `undefined` for every real account — it is only a fallback for
+   * accounts created by a script that happened to set it.
+   */
+  const profileHref = profileUsername ? `/u/${profileUsername}` : null;
 
   return (
     <div className="relative" ref={rootRef}>
@@ -136,6 +145,23 @@ export function AccountMenu() {
           </div>
 
           <div className="py-1">
+            {/*
+             * The prominent action is "View Profile" — the owner's own public
+             * page. The editor stays available as "Customize profile" in the
+             * same menu, so nothing is lost by making the public page the
+             * default first click.
+             */}
+            {profileHref ? (
+              <Link
+                href={profileHref}
+                role="menuitem"
+                onClick={close}
+                data-testid="account-menu-profile"
+                className="block px-4 py-2 text-[13px] font-medium text-[var(--text-strong)] transition-colors hover:bg-[var(--surface-3)]"
+              >
+                View profile
+              </Link>
+            ) : null}
             <Link
               href="/studio"
               role="menuitem"
@@ -143,7 +169,7 @@ export function AccountMenu() {
               data-testid="account-menu-studio"
               className="block px-4 py-2 text-[13px] text-[var(--text-default)] transition-colors hover:bg-[var(--surface-3)]"
             >
-              Edit profile
+              Customize profile
             </Link>
             <Link
               href="/account"

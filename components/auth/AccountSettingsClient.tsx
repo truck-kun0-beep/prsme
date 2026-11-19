@@ -110,7 +110,7 @@ export function AccountSettingsClient({
                       href="/studio"
                       className="text-[13px] text-iris-300 underline underline-offset-4"
                     >
-                      Edit profile
+                      Customize profile
                     </Link>
                     {/*
                      * Phase 8 — the follow-request area.

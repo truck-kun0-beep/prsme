@@ -247,8 +247,27 @@ for (const [layout, sel] of [["poster-grid", "poster-card"], ["featured", "featu
 /* 2. Themes                                                            */
 /* ------------------------------------------------------------------ */
 
+/*
+ * The curated palettes.
+ *
+ * PRE-PHASE 11 — the palette collection was curated from eleven presets down
+ * to ten distinct identities: `soft-sage` and `paper` were merged into
+ * `porcelain` (the light theme), `midnight` became `cobalt`, `rose-noir` and
+ * `cherry-cola` became `oxblood`, `forest-dark` became `moss`,
+ * `silver-screen` became `silver`, `amber-film` became `amber`, and
+ * `arctic-tide` became `arctic`.
+ *
+ * The OLD ids still resolve — as legacy ALIASES, see `LEGACY_THEME_ALIASES`
+ * in `lib/theme.ts` — so a saved profile keeps its look. But the alias maps
+ * the OLD id onto the NEW one, and the profile then reports the NEW id. That
+ * is why the assertions below probe the CURATED ids.
+ *
+ * `paper-grain` is gone too: the light theme is `porcelain`, which is a
+ * colour scheme rather than a grain overlay on a dark one. The background
+ * treatments are now `solid` and `gradient`.
+ */
 const sage = await probe({ w: 1280, h: 900 }, draft({
-  theme: "soft-sage", typography: "soft-editorial", background: "paper-grain",
+  theme: "porcelain", typography: "soft-editorial", background: "solid",
   collections: [filmsCol("poster-wall")],
 }), `({
   id: document.querySelector('.profile-scope')?.dataset.themeId,
@@ -258,14 +277,14 @@ const sage = await probe({ w: 1280, h: 900 }, draft({
   accent: getComputedStyle(document.querySelector('.profile-scope')).getPropertyValue('--pf-accent').trim(),
   text: getComputedStyle(document.querySelector('.profile-scope')).getPropertyValue('--pf-text').trim(),
 })`);
-test("Soft Sage applies as a genuine light theme",
-  !!sage && sage.id === "soft-sage" && sage.tone === "light", sage);
+test("Porcelain applies as a genuine light theme",
+  !!sage && sage.id === "porcelain" && sage.tone === "light", sage);
 test("Soft Editorial changes the heading font family",
   !!sage && /Cormorant/i.test(sage.family || ""), sage);
-await browser.screenshot(`${OUT}/theme-soft-sage-1280.png`);
+await browser.screenshot(`${OUT}/theme-porcelain-1280.png`);
 
 const cherry = await probe({ w: 1280, h: 900 }, draft({
-  theme: "cherry-cola", typography: "soft-editorial",
+  theme: "oxblood", typography: "soft-editorial",
   collections: [filmsCol("poster-wall")],
 }), `({
   id: document.querySelector('.profile-scope')?.dataset.themeId,
@@ -273,13 +292,13 @@ const cherry = await probe({ w: 1280, h: 900 }, draft({
   accent: getComputedStyle(document.querySelector('.profile-scope')).getPropertyValue('--pf-accent').trim(),
 })`);
 test("changing the theme does not reset the typography preset",
-  !!cherry && cherry.id === "cherry-cola" && /Cormorant/i.test(cherry.family || ""), cherry);
-await browser.screenshot(`${OUT}/theme-cherry-cola-1280.png`);
+  !!cherry && cherry.id === "oxblood" && /Cormorant/i.test(cherry.family || ""), cherry);
+await browser.screenshot(`${OUT}/theme-oxblood-1280.png`);
 
-/* Every theme resolves, and all eleven differ. */
+/* Every theme resolves, and all ten differ. */
 const ALL_THEMES = [
-  "obsidian", "violet", "midnight", "rose-noir", "paper",
-  "forest-dark", "cherry-cola", "silver-screen", "amber-film", "arctic-tide", "soft-sage",
+  "obsidian", "violet", "cobalt", "oxblood", "moss",
+  "silver", "amber", "arctic", "terracotta", "porcelain",
 ];
 const themeSets = {};
 let allApplied = true;
@@ -291,9 +310,9 @@ for (const id of ALL_THEMES) {
   if (!r || r.id !== id) { allApplied = false; continue; }
   themeSets[id] = r.set;
 }
-test("all 11 theme presets apply to the profile", allApplied, themeSets);
-test("all 11 themes have distinct bg / surface / text / accent sets",
-  Object.keys(themeSets).length === 11 && new Set(Object.values(themeSets)).size === 11,
+test("all 10 theme presets apply to the profile", allApplied, themeSets);
+test("all 10 themes have distinct bg / surface / text / accent sets",
+  Object.keys(themeSets).length === 10 && new Set(Object.values(themeSets)).size === 10,
   Object.fromEntries(Object.entries(themeSets).map(([k, v]) => [k, v.slice(0, 34)])));
 
 /* ------------------------------------------------------------------ */
@@ -327,7 +346,7 @@ test("typography presets yield at least 5 distinct heading families",
   Object.fromEntries(Object.entries(typoHeads).map(([k, v]) => [k, v.split(",")[0]])));
 
 /* Theme + typography screenshots with both layouts populated. */
-for (const id of ["soft-sage", "cherry-cola", "forest-dark", "arctic-tide", "amber-film", "silver-screen"]) {
+for (const id of ["porcelain", "oxblood", "moss", "arctic", "amber", "silver"]) {
   for (const w of [390, 1280]) {
     await browser.setViewport(w, 900);
     await browser.seed(draft({

@@ -140,7 +140,7 @@ export function AppearancePanel() {
       <PanelCard
         testId="studio-appearance-typography"
         title="Typography"
-        description="Eight curated voices. Each preset uses one of the eight families resolved through next/font — no runtime stylesheet dependency."
+        description="Twelve curated voices. Each preset resolves its families through next/font — no runtime stylesheet dependency."
       >
         <div className="grid grid-cols-1 gap-2.5">
           {TYPOGRAPHY_LIST.map((o) => {

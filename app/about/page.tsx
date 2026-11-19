@@ -4,6 +4,8 @@ import { SiteNav } from "@/components/SiteNav";
 import { SiteFooter } from "@/components/SiteFooter";
 import { Reveal } from "@/components/Reveal";
 import { Button } from "@/components/Button";
+import { ThemeShowcase } from "@/components/about/ThemeShowcase";
+import { ClicksShowcase } from "@/components/about/ClicksShowcase";
 
 export const metadata: Metadata = {
   title: "About",
@@ -22,14 +24,33 @@ export const metadata: Metadata = {
 /**
  * The About page.
  *
- * Concise, and honest about what PRSME actually is. In particular it makes
- * NO claims about user counts, review volumes, media coverage, partnerships,
- * or integrations — none of those are verified, and an About page that
- * invents them is worse than one that says what is true.
+ * PRE-PHASE 11 — this page now absorbs the old Themes destination, so it is
+ * both the product explanation AND the theme showcase. The themes live at
+ * `/about#themes`, which is where the old `/themes` route redirects.
  *
- * The artwork section is explicit that covers and catalogue details come
- * from external providers and stay on their servers. PRSME stores a
- * reference, never a copy.
+ * The page is also the default landing page for a guest: `/` renders this
+ * content for a visitor with no session, while a signed-in visitor is sent to
+ * Discover instead. A visitor should understand what PRSME is before being
+ * asked to create an account.
+ *
+ * The editorial structure the brief asks for:
+ *
+ *   1. PRSME introduction and purpose
+ *   2. What users can do on PRSME
+ *   3. Profile customization and collections
+ *   4. Discover and personal media reviews
+ *   5. My Clicks — what the photography shelf actually is
+ *   6. The curated Themes showcase
+ *   7. A call to action
+ *
+ * It is also honest about what PRSME actually is. In particular it makes NO
+ * claims about user counts, review volumes, media coverage, partnerships, or
+ * integrations — none of those are verified, and an About page that invents
+ * them is worse than one that says what is true.
+ *
+ * The artwork section is explicit that covers and catalogue details come from
+ * external providers and stay on their servers. PRSME stores a reference,
+ * never a copy.
  */
 export default function AboutPage() {
   return (
@@ -56,7 +77,7 @@ export default function AboutPage() {
                 Create your profile
               </Button>
               <Button href="/discover" variant="secondary" size="lg">
-                Explore reviews
+                Explore Discover
               </Button>
             </div>
           </Reveal>
@@ -101,11 +122,11 @@ export default function AboutPage() {
               How it works
             </p>
             <h2 className="mt-3 max-w-2xl font-display text-3xl leading-tight text-[var(--text-strong)] md:text-4xl">
-              Three things, done properly.
+              Four things, done properly.
             </h2>
 
-            <div className="mt-10 grid gap-6 md:grid-cols-3 md:gap-8">
-              <article className="surface-card p-6">
+            <div className="mt-10 grid gap-6 md:grid-cols-2 md:gap-8">
+              <article className="glass-surface p-6">
                 <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-[var(--text-faint)]">
                   01
                 </span>
@@ -120,7 +141,7 @@ export default function AboutPage() {
                 </p>
               </article>
 
-              <article className="surface-card p-6">
+              <article className="glass-surface p-6">
                 <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-[var(--text-faint)]">
                   02
                 </span>
@@ -135,7 +156,7 @@ export default function AboutPage() {
                 </p>
               </article>
 
-              <article className="surface-card p-6">
+              <article className="glass-surface p-6">
                 <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-[var(--text-faint)]">
                   03
                 </span>
@@ -149,14 +170,72 @@ export default function AboutPage() {
                   people actually said.
                 </p>
               </article>
+
+              <article className="glass-surface p-6">
+                <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-[var(--text-faint)]">
+                  04
+                </span>
+                <h3 className="mt-3 font-display text-xl text-[var(--text-strong)]">
+                  My List
+                </h3>
+                <p className="mt-3 text-[14px] leading-relaxed text-[var(--text-muted)]">
+                  One personal queue for everything worth coming back to —
+                  films and series to watch, books and manga to read, records
+                  and songs to listen. It is private, it follows you across
+                  devices, and it sorts itself into those three groups.
+                </p>
+              </article>
             </div>
           </Reveal>
         </section>
 
+        {/* ---- Profile customization ---- */}
+        <section className="container-page mt-20 md:mt-28">
+          <Reveal>
+            <div className="grid gap-10 md:grid-cols-12 md:gap-12">
+              <div className="md:col-span-5">
+                <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-[var(--accent-300)]">
+                  Customization
+                </p>
+                <h2 className="mt-3 font-display text-3xl leading-tight text-[var(--text-strong)] md:text-4xl">
+                  The page is designed by you.
+                </h2>
+              </div>
+              <div className="space-y-5 md:col-span-7">
+                <p className="text-[15px] leading-relaxed text-[var(--text-muted)]">
+                  Ten curated themes, twelve typography voices, three page
+                  layouts, and two background treatments. Every choice is a
+                  real design decision rather than a swatch: a theme changes
+                  your surfaces, your text, your accent, your rating badges and
+                  your tags together, so the page stays coherent whatever you
+                  pick.
+                </p>
+                <p className="text-[15px] leading-relaxed text-[var(--text-muted)]">
+                  Every theme below is rendered from the same token set the
+                  Studio uses, so what you see here is exactly what your
+                  profile will look like. Viewing this page never changes your
+                  own settings — pick a palette you like, then set it in the
+                  Studio.
+                </p>
+                <p className="text-[15px] leading-relaxed text-[var(--text-muted)]">
+                  You can change any of it later. Nothing about your theme is
+                  locked in.
+                </p>
+              </div>
+            </div>
+          </Reveal>
+        </section>
+
+        {/* ---- Themes showcase ---- */}
+        <ThemeShowcase />
+
+        {/* ---- My Clicks ---- */}
+        <ClicksShowcase />
+
         {/* ---- Privacy ---- */}
         <section className="container-page mt-20 md:mt-28">
           <Reveal>
-            <div className="surface-card p-6 md:p-10">
+            <div className="glass-surface p-6 md:p-10">
               <div className="grid gap-8 md:grid-cols-12 md:gap-12">
                 <div className="md:col-span-5">
                   <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-[var(--accent-300)]">
@@ -179,6 +258,10 @@ export default function AboutPage() {
                     interface: a private profile&apos;s reviews are not
                     returned to anyone else, and the counts on a media page
                     exclude them too.
+                  </p>
+                  <p className="text-[15px] leading-relaxed text-[var(--text-muted)]">
+                    Your List is private in the same way — it is yours alone,
+                    and it never appears on your public profile.
                   </p>
                   <p className="text-[15px] leading-relaxed text-[var(--text-muted)]">
                     Drafts are yours alone, always. Nobody else can edit or
@@ -212,8 +295,9 @@ export default function AboutPage() {
                 <p className="text-[15px] leading-relaxed text-[var(--text-muted)]">
                   PRSME stores a link to that artwork and names whose it is.
                   The images themselves stay on the provider&apos;s servers and
-                  are never copied into PRSME&apos;s own storage. The only
-                  files PRSME hosts are profile avatars.
+                  are never copied into PRSME&apos;s own storage. The same
+                  applies to My Clicks: you paste an image URL, and your
+                  browser loads the picture straight from its host.
                 </p>
                 <p className="text-[15px] leading-relaxed text-[var(--text-muted)]">
                   Every media page links back to the original catalogue entry,
@@ -227,7 +311,7 @@ export default function AboutPage() {
         {/* ---- Closing ---- */}
         <section className="container-page mt-20 md:mt-28">
           <Reveal>
-            <div className="surface-card flex flex-col items-start gap-6 p-8 md:flex-row md:items-center md:justify-between md:p-12">
+            <div className="glass-surface flex flex-col items-start gap-6 p-8 md:flex-row md:items-center md:justify-between md:p-12">
               <div className="max-w-xl">
                 <h2 className="font-display text-3xl leading-tight text-[var(--text-strong)]">
                   Start with one shelf.
@@ -245,8 +329,9 @@ export default function AboutPage() {
                 <Link
                   href="/u/noir"
                   className="inline-flex h-12 items-center rounded-md border border-[var(--line-strong)] bg-[var(--surface-2)] px-6 text-[15px] font-medium text-[var(--text-default)] transition-colors hover:bg-[var(--surface-3)]"
+                  data-testid="about-example-profile"
                 >
-                  See an example
+                  View Example Profile
                 </Link>
               </div>
             </div>

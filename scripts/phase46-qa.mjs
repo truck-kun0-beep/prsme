@@ -445,6 +445,15 @@ check(
 // The light theme must stay legible, which is the stated risk for a filled button.
 await browser.setViewport(1280, 1000);
 await browser.seed(draftWith({ theme: "paper" }));
+/*
+ * The light theme is `porcelain` now.
+ *
+ * PRE-PHASE 11 — the light palette was renamed and re-tinted warm: `paper` and
+ * `soft-sage` were merged into `porcelain`. The legacy id `paper` still
+ * resolves through `LEGACY_THEME_ALIASES`, but the suite names the CURRENT id
+ * so the screenshot it produces is evidence for the palette that ships.
+ */
+await browser.seed(draftWith({ theme: "porcelain" }));
 await browser.goto(`${HOST}/u/noir`, { waitMs: 4500 });
 await wait(1500);
 const lightTheme = await browser.evalJs(`
@@ -457,7 +466,7 @@ check(
   lightTheme.color !== lightTheme.background,
   lightTheme,
 );
-await browser.screenshot(`${OUT}/links-paper-theme-1280.png`, { fullPage: true });
+await browser.screenshot(`${OUT}/links-porcelain-theme-1280.png`, { fullPage: true });
 
 /* ================== 5. STUDIO SAVE + PERSISTENCE ================== */
 /*

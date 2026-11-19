@@ -21,12 +21,12 @@ function test(name, value, pass) {
 const { goto, setViewport, evalJs, close } = await connect();
 
 try {
-  /* ------------------- T1. Midnight Blue accent + ratings ------------- */
+  /* ------------------- T1. Cobalt accent + ratings -------------------- */
   await setViewport(1280, 1100);
   await goto(`${HOST}/studio`, { waitMs: 4500 });
   await evalJs(`document.querySelector('[data-testid="studio-tab-appearance"]').click();`);
   await new Promise((r) => setTimeout(r, 250));
-  await evalJs(`document.querySelector('[data-testid="studio-theme-midnight"] input').click();`);
+  await evalJs(`document.querySelector('[data-testid="studio-theme-cobalt"] input').click();`);
   await new Promise((r) => setTimeout(r, 1200));
   // save
   await evalJs(`document.querySelector('[data-testid="studio-save-btn"]')?.click();`);
@@ -59,12 +59,20 @@ try {
       };
     })();
   `);
-  test("T1 Midnight · accent is blue/cyan (not violet)", t1.accent, t1.accent.startsWith("#7D") || t1.accent.startsWith("#38"));
-  test("T1 Midnight · rating badge uses blue, not violet", t1.rating, t1.rating.startsWith("#7D") || t1.rating.startsWith("#38"));
+  /*
+   * The curated palette's blue is `cobalt` (formerly `midnight`).
+   *
+   * PRE-PHASE 11 — the palette collection was curated, and `midnight` was
+   * renamed `cobalt` with a re-tinted blue accent: `--pf-accent` is #93C5FF
+   * and `--pf-rating` is #B6D6FF. The old `midnight` accent was #7D… / #38…,
+   * so the assertion below is written against the CURRENT token values.
+   */
+  test("T1 Cobalt · accent is blue (not violet)", t1.accent, t1.accent.startsWith("#93C5FF"));
+  test("T1 Cobalt · rating badge uses blue, not violet", t1.rating, t1.rating.startsWith("#B6D6FF"));
 
-  /* ------------------- T2. Paper readability ----------------------- */
+  /* ------------------- T2. Porcelain readability --------------------- */
   await goto(`${HOST}/studio`, { waitMs: 4500 });
-  await evalJs(`document.querySelector('[data-testid="studio-theme-paper"] input').click();`);
+  await evalJs(`document.querySelector('[data-testid="studio-theme-porcelain"] input').click();`);
   await new Promise((r) => setTimeout(r, 1200));
   await evalJs(`document.querySelector('[data-testid="studio-save-btn"]')?.click();`);
   await new Promise((r) => setTimeout(r, 700));
@@ -77,8 +85,15 @@ try {
       scheme: getComputedStyle(document.body).colorScheme,
     };
   `);
-  // Paper body ink is --pf-text (#2A2A30) and headings use --pf-text-strong
-  // (#1B1B1F); both are dark-on-light, so accept either as "readable ink".
+  /*
+   * The curated light theme is `porcelain` (formerly `paper`, and it also
+   * absorbed `soft-sage`).
+   *
+   * PRE-PHASE 11 — the light palette was renamed and re-tinted warm: its
+   * background is #F4F1EA (rgb 244,241,234), its body ink is #2C2A26 and its
+   * headings use #1B1A18. All three are dark-on-light, so the ink check
+   * accepts either as "readable ink".
+   */
   const darkInk = /rgb\(\s*(27|42),\s*\1?/.test(t2.color) === false
     ? null
     : t2.color;
@@ -90,9 +105,9 @@ try {
     const lum = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
     return lum < 0.35;
   })();
-  test("T2 Paper · light bg + dark readable ink + light color-scheme",
+  test("T2 Porcelain · light bg + dark readable ink + light color-scheme",
     t2,
-    /rgb\(\s*247,\s*244,\s*238/.test(t2.bg) && isDark && t2.scheme === 'light');
+    /rgb\(\s*244,\s*241,\s*234/.test(t2.bg) && isDark && t2.scheme === 'light');
 
   /* ------------------- T3. Typography changes computed font-family -- */
   // Use Typewriter, then inspect computed font-family on display + body.

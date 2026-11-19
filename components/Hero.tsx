@@ -19,7 +19,7 @@ export function Hero() {
                   aria-hidden
                   className="inline-block h-1.5 w-1.5 rounded-full bg-iris-300 animate-iris-pulse"
                 />
-                PRSME · Phase 1 preview
+                Built for people who keep a list
               </span>
             </Reveal>
             <Reveal delay={120}>

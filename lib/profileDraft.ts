@@ -32,9 +32,9 @@ import {
   DEFAULT_TYPOGRAPHY,
   DEFAULT_LAYOUT,
   DEFAULT_BACKGROUND,
+  normaliseThemeId,
 } from "./theme";
 import {
-  THEME_IDS_ALL,
   TYPOGRAPHY_LIST,
 } from "./profileTheme";
 import {
@@ -619,10 +619,17 @@ function stableClickId(
 /*                                Validation                                  */
 /* -------------------------------------------------------------------------- */
 
-const THEME_IDS: ThemeId[] = THEME_IDS_ALL;
 const TYPO_IDS: TypographyId[] = TYPOGRAPHY_LIST.map((t) => t.id);
 const LAYOUT_IDS: LayoutPreset[] = ["editorial", "compact", "poster"];
-const BG_IDS: BackgroundTreatment[] = ["solid", "gradient", "paper-grain"];
+/*
+ * Pre-Phase 11 — the `paper-grain` background mode was removed. Only Solid and
+ * Gradient remain; the light experience is now the `porcelain` *theme*, which
+ * is a colour scheme rather than a grain overlay on a dark page.
+ *
+ * A stored profile that still says `paper-grain` is repaired to `solid`
+ * rather than rejected, so the owner's other customisation survives.
+ */
+const BG_IDS: BackgroundTreatment[] = ["solid", "gradient"];
 const COLLECTION_LAYOUT_IDS: CollectionLayoutId[] = [
   "poster-grid",
   "featured",
@@ -748,9 +755,15 @@ export function readDraft(input: unknown): ProfileDraft {
       fallback.customLinksSection,
     ),
     appearance: {
-      theme: THEME_IDS.includes(ap.theme as ThemeId)
-        ? (ap.theme as ThemeId)
-        : fallback.appearance.theme,
+      /*
+       * Pre-Phase 11 — a legacy theme id is NORMALISED, not rejected.
+       *
+       * The curation merged and renamed several presets. A profile saved with
+       * `rose-noir` must keep rendering in a burgundy palette rather than
+       * snapping to the default, so `normaliseThemeId` maps the old id onto
+       * its closest retained palette.
+       */
+      theme: normaliseThemeId(ap.theme ?? fallback.appearance.theme),
       typography: TYPO_IDS.includes(ap.typography as TypographyId)
         ? (ap.typography as TypographyId)
         : fallback.appearance.typography,

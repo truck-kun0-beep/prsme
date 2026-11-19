@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { THEME_BY_ID, type ThemeId } from "@/lib/theme";
+import { THEME_BY_ID, normaliseThemeId, type ThemeId } from "@/lib/theme";
 import type { ProfileDraft } from "@/lib/profileDraft";
 
 const THEME_STYLE_ID = "prsme-theme-vars";
@@ -24,7 +24,16 @@ export function useThemeMount(appearance: ProfileDraft["appearance"] | null) {
 }
 
 function applyAppearance(appearance: ProfileDraft["appearance"] | null) {
-  const themeId: ThemeId = appearance?.theme ?? "obsidian";
+  /*
+   * Pre-Phase 11 — normalise the id before painting.
+   *
+   * A draft saved before the palette curation can still carry an old theme
+   * id. Painting `data-theme="rose-noir"` would resolve no tokens at all,
+   * leaving the page on the default palette's *page* colours while the
+   * profile scope painted the resolved palette — two different themes on one
+   * screen. Normalising here keeps the two layers in agreement.
+   */
+  const themeId: ThemeId = normaliseThemeId(appearance?.theme ?? "obsidian");
   const preset = THEME_BY_ID[themeId];
   const html = document.documentElement;
   html.setAttribute("data-theme", themeId);
@@ -36,9 +45,7 @@ function applyAppearance(appearance: ProfileDraft["appearance"] | null) {
   rule += `}`;
 
   let bg = "";
-  if (appearance?.background === "paper-grain") {
-    bg = `html[data-theme] body{background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)' opacity='0.55'/></svg>");background-repeat:no-repeat;background-attachment:fixed;background-size:cover;}`;
-  } else if (appearance?.background === "gradient") {
+  if (appearance?.background === "gradient") {
     const panel = preset.tokens["--panel-haze"] || "transparent";
     bg = `html[data-theme] body{background-image:${panel};background-repeat:no-repeat;background-attachment:fixed;background-size:cover;}`;
   } else {
